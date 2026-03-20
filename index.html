@@ -782,101 +782,80 @@ async function saveResult(result) {
 }
 
 async function loadResult() {
-  // 0. 初始化配置
+  // 1. 初始化配置
   initApiConfig();
   if (!_supabaseClient) initSupabase();
   
-  // 0. 先尝试 localStorage（本地优先，无需网络）
+  // 2. 先尝试 localStorage（本地优先）
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.analysis) {
+        console.log('从 localStorage 加载数据');
         _lastResult = parsed;
         return parsed;
       }
     }
   } catch(e) { console.warn('localStorage load failed:', e); }
   
-  // 0.5. 尝试后端API加载（Cloudflare Worker 云端）
-  if (_apiBaseUrl) {
-    try {
-      console.log('尝试从云端加载数据:', _apiBaseUrl);
-      const resp = await fetch(_apiBaseUrl + '/api/last-analysis', { timeout: 8000 });
-      console.log('云端响应状态:', resp.status);
-      if (resp.ok) {
-        const json = await resp.json();
-        console.log('云端返回:', JSON.stringify(json).substring(0, 200));
-        // json.analysis 就是完整的分析结果
-        if (json.success && json.analysis && json.analysis.analysis) {
-          showSyncStatus('☁️ 已从云端加载数据');
-          _lastResult = json.analysis;
-          return json.analysis;
-        }
-      }
-    } catch(e) { 
-      console.warn('后端API加载失败:', e.message);
-      showSyncStatus('⚠️ 云端加载失败: ' + e.message, true);
-    }
-  }
-  
-  // 0.6. 尝试 Supabase 云同步加载
-  if (_supabaseClient) {
-    _syncStatus.loading = true;
-    try {
-      const { data, error } = await _supabaseClient.from('reports').select('data,filename,updated_at').eq('id', 'latest').single();
-      if (data && data.data) {
-        const result = expandSlimResult(data.data);
-        if (result && result.analysis) {
-          _syncStatus.lastSync = data.updated_at;
-          _syncStatus.loading = false;
-          showSyncStatus('☁️ 已从云端加载数据');
-          return result;
-        }
-      } else if (error) {
-        console.warn('Supabase load failed:', error);
-      }
-    } catch(e) {
-      console.warn('Supabase load error:', e);
-    }
-    _syncStatus.loading = false;
-  }
-  
-  // 1. 先尝试 URL hash（最高优先，支持跨设备分享）
+  // 3. URL hash（支持链接分享）
   const hash = location.hash.slice(1);
   if (hash && hash.length > 10) {
     try {
       const jsonStr = decodeURIComponent(escape(atob(hash)));
       const slim = JSON.parse(jsonStr);
       const result = expandSlimResult(slim);
-      if (result && result.analysis) return result;
+      if (result && result.analysis) {
+        console.log('从 URL hash 加载数据');
+        return result;
+      }
     } catch(e) { console.warn('URL hash load failed:', e); }
   }
-  // 2. localStorage
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      _lastResult = JSON.parse(raw);
-      return _lastResult;
+  
+  // 4. 尝试后端API加载（Cloudflare Worker 云端）- 最后尝试
+  if (_apiBaseUrl) {
+    try {
+      console.log('尝试从云端加载:', _apiBaseUrl);
+      const resp = await fetch(_apiBaseUrl + '/api/last-analysis', { 
+        timeout: 10000,
+        signal: AbortSignal.timeout ? undefined : undefined 
+      });
+      console.log('云端响应状态:', resp.status);
+      if (resp.ok) {
+        const json = await resp.json();
+        console.log('云端返回 success:', json.success, 'has analysis:', !!json.analysis);
+        if (json.success && json.analysis && json.analysis.analysis) {
+          console.log('从云端加载数据成功');
+          showSyncStatus('☁️ 已从云端加载数据');
+          _lastResult = json.analysis;
+          return json.analysis;
+        } else {
+          console.log('云端数据无效:', json);
+        }
+      }
+    } catch(e) { 
+      console.warn('云端加载失败:', e.name, e.message);
     }
-  } catch(e) { console.warn('localStorage load failed:', e); }
-  // 3. IndexedDB
-  try {
-    const db = await openIDB();
-    const tx = db.transaction(IDB_STORE, 'readonly');
-    const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
-    return new Promise((resolve) => {
-      req.onsuccess = () => {
-        if (req.result) {
-          try {
-            _lastResult = JSON.parse(req.result);
-            resolve(_lastResult);
-          } catch(e) { resolve(null); }
-        } else { resolve(null); }
-      };
-      req.onerror = () => resolve(null);
-    });
-  } catch(e) { console.warn('IndexedDB load failed:', e); return null; }
+  }
+  
+  // 5. Supabase 云同步加载（备选）
+  if (_supabaseClient) {
+    try {
+      const { data, error } = await _supabaseClient.from('reports').select('data,filename,updated_at').eq('id', 'latest').single();
+      if (data && data.data) {
+        const result = expandSlimResult(data.data);
+        if (result && result.analysis) {
+          _syncStatus.lastSync = data.updated_at;
+          showSyncStatus('☁️ 已从Supabase加载数据');
+          return result;
+        }
+      }
+    } catch(e) { console.warn('Supabase load error:', e); }
+  }
+  
+  console.log('所有数据源都没有数据');
+  return null;
 }
 
 // 增强版数据检查函数 - 同时检查所有存储
