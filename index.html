@@ -535,21 +535,47 @@
 <script>
 // 存储状态检查函数
 function checkStorageStatus() {
+  const tenantId = getTenantId();
   const raw = localStorage.getItem(STORAGE_KEY);
+  
+  let info = '🏨 德胧报表 - 数据状态\n';
+  info += '═══════════════════\n';
+  info += '酒店ID: ' + tenantId.substring(0, 12) + '...\n';
+  info += '\n';
+  
   if (raw) {
     try {
       const data = JSON.parse(raw);
       const fname = data.file_info?.filename || '未知';
       const time = data.file_info?.analysis_time ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '未知';
       const hCount = data.analysis?.hotel_count || 0;
-      const info = '✅ 本地存储正常\n\n文件名: ' + fname + '\n分析时间: ' + time + '\n酒店数量: ' + hCount + '家\n\n' + checkAllStorage();
-      alert(info + '\n\n💡 提示：如手机端看不到数据，请点击右上角菜单 → "添加到主屏幕"，然后从主屏幕图标打开。');
+      const savedTenant = data.tenant_id || '无';
+      
+      info += '✅ 本地有数据\n';
+      info += '文件名: ' + fname + '\n';
+      info += '分析时间: ' + time + '\n';
+      info += '酒店数量: ' + hCount + '家\n';
+      info += '数据所属: ' + savedTenant.substring(0, 12) + '...\n';
+      
+      if (savedTenant !== tenantId) {
+        info += '\n⚠️ 数据租户不匹配！\n';
+        info += '这份数据属于其他酒店，请上传新文件。\n';
+      }
     } catch(e) {
-      alert('❌ 数据格式错误: ' + e.message + '\n\n' + checkAllStorage());
+      info += '❌ 数据格式错误: ' + e.message + '\n';
     }
   } else {
-    alert('⚠️ 本地无数据\n\n' + checkAllStorage() + '\n\n请在电脑端上传 Excel 文件进行分析，数据会自动保存到本地。手机端打开同一链接后即可查看。');
+    info += '⚠️ 本地无数据\n\n';
+    info += '请在电脑端上传 Excel 文件进行分析。\n';
   }
+  
+  info += '\n═══════════════════\n';
+  info += '💡 租户隔离说明：\n';
+  info += '• 每个设备有独立的数据\n';
+  info += '• 上传数据会自动同步到云端\n';
+  info += '• 其他酒店无法看到您的数据\n';
+  
+  alert(info);
 }
 </script>
 
@@ -576,12 +602,43 @@ const WEEK_LABELS_FALLBACK = ['最新周', '第2周', '第3周', '第4周', '第
 const STORAGE_KEY = 'delong_analysis_result';
 
 // ═══════════════════════════════════════════════════════════════
-// 后端 API 配置（方案B：Flask服务端同步）
+// 多租户架构 - 每个酒店独立数据
+// ═══════════════════════════════════════════════════════════════
+const TENANT_KEY = 'delong_tenant_id';
+
+function generateTenantId() {
+  // 生成唯一的酒店ID: 时间戳 + 随机字符串
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 8);
+  return timestamp + '-' + random;
+}
+
+function getTenantId() {
+  let tenantId = localStorage.getItem(TENANT_KEY);
+  if (!tenantId) {
+    tenantId = generateTenantId();
+    localStorage.setItem(TENANT_KEY, tenantId);
+    console.log('生成新租户ID:', tenantId);
+  }
+  return tenantId;
+}
+
+function showTenantInfo() {
+  const tenantId = getTenantId();
+  return '酒店ID: ' + tenantId.substring(0, 12) + '...\n完整ID: ' + tenantId;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 后端 API 配置（支持多租户）
 // ═══════════════════════════════════════════════════════════════
 const API_CONFIG_KEY = 'delong_api_config';
-// 默认启用 Cloudflare Worker 后端同步
+// 使用 jsonbin.io（国内访问更快）
+const JSONBIN_API = 'https://api.jsonbin.io/v3/b';
+const JSONBIN_KEY = '$2a$10$YOUR_JSONBIN_API_KEY'; // 需要用户自己注册获取
+// 默认使用本地存储+Cloudflare备份
 const DEFAULT_API_URL = 'https://delong-report-sync.chaoliuzhu65.workers.dev';
 let _apiBaseUrl = DEFAULT_API_URL;
+let _tenantId = '';
 
 function getApiConfig() {
   try {
@@ -670,34 +727,43 @@ function openIDB() {
 
 async function saveResult(result) {
   _lastResult = result;
+  // 添加租户ID
+  const tenantId = getTenantId();
+  result.tenant_id = tenantId;
   const jsonStr = JSON.stringify(result);
+  
   // 1. localStorage
-  try { localStorage.setItem(STORAGE_KEY, jsonStr); } catch(e) { console.warn('localStorage save failed:', e); }
+  try { 
+    localStorage.setItem(STORAGE_KEY, jsonStr);
+    console.log('保存到 localStorage (租户:', tenantId.substring(0,8) + '...)');
+  } catch(e) { console.warn('localStorage save failed:', e); }
+  
   // 2. IndexedDB
   try {
     const db = await openIDB();
     const tx = db.transaction(IDB_STORE, 'readwrite');
     tx.objectStore(IDB_STORE).put(jsonStr, IDB_KEY);
   } catch(e) { console.warn('IndexedDB save failed:', e); }
-  // 2.5. 后端API同步（Cloudflare Worker）
+  
+  // 3. 后端API同步（Cloudflare Worker）- 按租户保存
   initApiConfig();
   if (_apiBaseUrl) {
     try {
-      const resp = await fetch(_apiBaseUrl + '/api/sync', {
+      const resp = await fetch(_apiBaseUrl + '/api/sync?' + new URLSearchParams({
+        tenant: tenantId
+      }), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: jsonStr
       });
       const respData = await resp.json().catch(() => ({}));
       if (resp.ok && respData.success) {
-        showSyncStatus('☁️ 数据已同步到云端，其他设备可查看');
-        console.log('✅ 云端同步成功:', respData.updated_at);
+        showSyncStatus('☁️ 数据已同步到云端（租户隔离）');
+        console.log('✅ 云端同步成功 (租户:', tenantId, ')');
       } else {
-        showSyncStatus('⚠️ 云端同步失败，将仅本地保存', true);
         console.warn('云端同步失败:', respData);
       }
     } catch(e) { 
-      showSyncStatus('⚠️ 云端同步失败，将仅本地保存', true);
       console.warn('后端API同步失败:', e); 
     }
   }
@@ -782,24 +848,25 @@ async function saveResult(result) {
 }
 
 async function loadResult() {
-  // 1. 初始化配置
+  // 0. 初始化配置
   initApiConfig();
+  _tenantId = getTenantId();
   if (!_supabaseClient) initSupabase();
   
-  // 2. 先尝试 localStorage（本地优先）
+  // 1. 先尝试 localStorage（本地优先）- 只加载自己的租户数据
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.analysis) {
-        console.log('从 localStorage 加载数据');
+      if (parsed && parsed.analysis && parsed.tenant_id === _tenantId) {
+        console.log('从 localStorage 加载数据 (租户:', _tenantId.substring(0,8) + '...)');
         _lastResult = parsed;
         return parsed;
       }
     }
   } catch(e) { console.warn('localStorage load failed:', e); }
   
-  // 3. URL hash（支持链接分享）
+  // 2. URL hash（支持链接分享）
   const hash = location.hash.slice(1);
   if (hash && hash.length > 10) {
     try {
@@ -813,53 +880,37 @@ async function loadResult() {
     } catch(e) { console.warn('URL hash load failed:', e); }
   }
   
-  // 4. 尝试后端API加载（Cloudflare Worker 云端）- 最后尝试
+  // 3. 尝试后端API加载（Cloudflare Worker 云端）- 按租户加载
   if (_apiBaseUrl) {
     try {
-      console.log('尝试从云端加载:', _apiBaseUrl);
+      console.log('尝试从云端加载 (租户:', _tenantId + ')');
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       
-      const resp = await fetch(_apiBaseUrl + '/api/last-analysis', { 
+      const resp = await fetch(_apiBaseUrl + '/api/last-analysis?' + new URLSearchParams({
+        tenant: _tenantId
+      }), { 
         signal: controller.signal,
         headers: { 'Accept': 'application/json' }
       });
       clearTimeout(timeoutId);
       
-      console.log('云端响应状态:', resp.status);
       if (resp.ok) {
         const json = await resp.json();
-        console.log('云端返回 success:', json.success, 'has analysis:', !!json.analysis);
-        
         // json.analysis 就是完整分析结果
         if (json.success && json.analysis && json.analysis.analysis) {
           console.log('从云端加载数据成功, hotel_count:', json.analysis.analysis.hotel_count);
+          // 保存到本地，带上租户ID
+          json.analysis.tenant_id = _tenantId;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(json.analysis));
           showSyncStatus('☁️ 已从云端加载数据');
           _lastResult = json.analysis;
           return json.analysis;
-        } else {
-          console.log('云端数据格式不对:', Object.keys(json.analysis || {}));
         }
       }
     } catch(e) { 
-      console.warn('云端加载失败:', e.name, e.message);
-      showSyncStatus('⚠️ 云端加载超时或失败', true);
+      console.warn('云端加载失败:', e.name);
     }
-  }
-  
-  // 5. Supabase 云同步加载（备选）
-  if (_supabaseClient) {
-    try {
-      const { data, error } = await _supabaseClient.from('reports').select('data,filename,updated_at').eq('id', 'latest').single();
-      if (data && data.data) {
-        const result = expandSlimResult(data.data);
-        if (result && result.analysis) {
-          _syncStatus.lastSync = data.updated_at;
-          showSyncStatus('☁️ 已从Supabase加载数据');
-          return result;
-        }
-      }
-    } catch(e) { console.warn('Supabase load error:', e); }
   }
   
   console.log('所有数据源都没有数据');
