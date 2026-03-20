@@ -679,7 +679,7 @@ async function saveResult(result) {
     const tx = db.transaction(IDB_STORE, 'readwrite');
     tx.objectStore(IDB_STORE).put(jsonStr, IDB_KEY);
   } catch(e) { console.warn('IndexedDB save failed:', e); }
-  // 2.5. 后端API同步（新增）
+  // 2.5. 后端API同步（Cloudflare Worker）
   initApiConfig();
   if (_apiBaseUrl) {
     try {
@@ -688,10 +688,18 @@ async function saveResult(result) {
         headers: { 'Content-Type': 'application/json' },
         body: jsonStr
       });
-      if (resp.ok) {
-        showSyncStatus('🖥️ 数据已同步到后端服务器');
+      const respData = await resp.json().catch(() => ({}));
+      if (resp.ok && respData.success) {
+        showSyncStatus('☁️ 数据已同步到云端，其他设备可查看');
+        console.log('✅ 云端同步成功:', respData.updated_at);
+      } else {
+        showSyncStatus('⚠️ 云端同步失败，将仅本地保存', true);
+        console.warn('云端同步失败:', respData);
       }
-    } catch(e) { console.warn('后端API同步失败:', e); }
+    } catch(e) { 
+      showSyncStatus('⚠️ 云端同步失败，将仅本地保存', true);
+      console.warn('后端API同步失败:', e); 
+    }
   }
   // 3. Supabase 云同步
   if (_supabaseClient) {
