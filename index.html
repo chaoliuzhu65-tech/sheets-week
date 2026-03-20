@@ -1301,14 +1301,28 @@ renderCollectPanel();
 // ═══════════════════════════════════════════════════════════════
 // 页面加载时恢复上次数据
 // ═══════════════════════════════════════════════════════════════
+let _loadSteps = [];
+
+function addLoadStep(msg) {
+  _loadSteps.push(msg);
+  console.log('[加载步骤]', msg);
+}
+
 (async function restoreLastData() {
+  _loadSteps = [];
+  
   // 显示正在加载状态
   document.getElementById('uploadStatus').innerHTML =
-    `<div class="alert alert-info py-2 small">
+    `<div class="alert alert-info py-2 small" id="loadingStatus">
       <i class="fas fa-sync-alt fa-spin me-1"></i>正在加载数据...
+      <br><span style="font-size:10px;color:#888;" id="loadSteps"></span>
     </div>`;
   
+  addLoadStep('开始加载');
+  addLoadStep('API地址: ' + _apiBaseUrl);
+  
   const cached = await loadResult();
+  
   if (cached && cached.analysis) {
     // 恢复日期标签
     if (cached.week_labels && cached.week_labels.length === 5) {
@@ -1322,29 +1336,24 @@ renderCollectPanel();
       `<div class="alert alert-success py-2 small">
         <i class="fas fa-check-circle me-1"></i>
         <strong>已加载数据：${fname}</strong>${atime ? ' ('+atime+')' : ''}${fromHash}
-        <br><span style="font-size:11px;color:#666;">数据来源：${_apiBaseUrl ? '☁️ 云端同步' : '📱 本地存储'}</span>
+        <br><span style="font-size:11px;color:#666;">数据来源：☁️ 云端同步</span>
       </div>`;
   } else {
-    // 检查并显示详细的失败原因
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const hasLocal = !!raw;
-    const hasHash = location.hash.length > 10;
-    const reason = [];
-    if (!hasLocal) reason.push('本地存储为空');
-    if (!hasHash) reason.push('URL无参数');
-    if (_apiBaseUrl) reason.push('云端无数据或加载失败');
+    // 显示加载步骤帮助调试
+    const stepsHtml = _loadSteps.length > 0 ? 
+      '<br><span style="font-size:10px;color:#888;">步骤: ' + _loadSteps.join(' → ') + '</span>' : '';
     
     document.getElementById('uploadStatus').innerHTML =
       `<div class="alert alert-warning py-2 small">
         <i class="fas fa-exclamation-triangle me-1"></i>
-        <strong>暂无数据</strong><br>
-        <span style="font-size:11px;">原因：${reason.join('，')}</span>
+        <strong>加载失败</strong>
+        ${stepsHtml}
         <hr style="margin:8px 0;">
-        <i class="fas fa-lightbulb me-1"></i><strong>使用方法：</strong><br>
+        <i class="fas fa-lightbulb me-1"></i><strong>解决方法：</strong><br>
         <span style="font-size:11px;">
-        1. 在电脑端上传 Excel 文件<br>
-        2. 数据会自动同步到云端<br>
-        3. 手机打开同一链接即可查看
+        1. 在电脑端上传 Excel 文件并确认同步成功<br>
+        2. 检查网络连接后刷新重试<br>
+        3. 点击右下角 📦 按钮查看详细状态
         </span>
       </div>`;
   }
