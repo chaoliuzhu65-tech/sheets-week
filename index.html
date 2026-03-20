@@ -742,10 +742,22 @@ async function loadResult() {
   initApiConfig();
   if (!_supabaseClient) initSupabase();
   
-  // 0.5. 尝试后端API加载（最高优先，真正跨设备）
+  // 0. 先尝试 localStorage（本地优先，无需网络）
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.analysis) {
+        _lastResult = parsed;
+        return parsed;
+      }
+    }
+  } catch(e) { console.warn('localStorage load failed:', e); }
+  
+  // 0.5. 尝试后端API加载（真正跨设备）
   if (_apiBaseUrl) {
     try {
-      const resp = await fetch(_apiBaseUrl + '/api/last-analysis');
+      const resp = await fetch(_apiBaseUrl + '/api/last-analysis', { timeout: 5000 });
       if (resp.ok) {
         const json = await resp.json();
         if (json.success && json.analysis) {
