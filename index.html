@@ -519,6 +519,30 @@
   </button>
 </nav>
 
+<!-- 存储状态调试按钮 -->
+<div style="position:fixed;bottom:70px;right:15px;z-index:999;" onclick="checkStorageStatus()">
+  <button style="background:#666;color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:14px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.2);" title="检查存储状态">📦</button>
+</div>
+
+<script>
+function checkStorageStatus() {
+  const raw = localStorage.getItem('delong_analysis_result');
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      const fname = data.file_info?.filename || '未知';
+      const time = data.file_info?.analysis_time ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '未知';
+      const hCount = data.analysis?.hotel_count || 0;
+      alert('✅ 本地存储正常\n\n文件名: ' + fname + '\n分析时间: ' + time + '\n酒店数量: ' + hCount + '家\n\n如需在其他设备查看，请上传同一链接分享。');
+    } catch(e) {
+      alert('❌ 数据格式错误: ' + e.message);
+    }
+  } else {
+    alert('⚠️ 本地无数据\n\n请先上传 Excel 文件进行分析，数据会自动保存到本地。');
+  }
+}
+</script>
+
 <div class="loading-overlay hidden" id="loadingOverlay">
   <div class="loading-box">
     <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem;"></div>
@@ -1232,6 +1256,13 @@ renderCollectPanel();
     const fromHash = location.hash.length > 10 ? ' <span class="data-badge">链接分享</span>' : '';
     document.getElementById('uploadStatus').innerHTML =
       `<div class="alert alert-success py-2 small"><i class="fas fa-database me-1"></i>已恢复数据：${fname}${atime ? ' ('+atime+')' : ''}${fromHash}</div>`;
+  } else {
+    // 检查 localStorage 状态
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      document.getElementById('uploadStatus').innerHTML =
+        `<div class="alert alert-warning py-2 small"><i class="fas fa-upload me-1"></i>请上传 Excel 文件进行分析（首次使用需上传文件）</div>`;
+    }
   }
 })();
 
