@@ -817,25 +817,33 @@ async function loadResult() {
   if (_apiBaseUrl) {
     try {
       console.log('尝试从云端加载:', _apiBaseUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
       const resp = await fetch(_apiBaseUrl + '/api/last-analysis', { 
-        timeout: 10000,
-        signal: AbortSignal.timeout ? undefined : undefined 
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
       });
+      clearTimeout(timeoutId);
+      
       console.log('云端响应状态:', resp.status);
       if (resp.ok) {
         const json = await resp.json();
         console.log('云端返回 success:', json.success, 'has analysis:', !!json.analysis);
+        
+        // json.analysis 就是完整分析结果
         if (json.success && json.analysis && json.analysis.analysis) {
-          console.log('从云端加载数据成功');
+          console.log('从云端加载数据成功, hotel_count:', json.analysis.analysis.hotel_count);
           showSyncStatus('☁️ 已从云端加载数据');
           _lastResult = json.analysis;
           return json.analysis;
         } else {
-          console.log('云端数据无效:', json);
+          console.log('云端数据格式不对:', Object.keys(json.analysis || {}));
         }
       }
     } catch(e) { 
       console.warn('云端加载失败:', e.name, e.message);
+      showSyncStatus('⚠️ 云端加载超时或失败', true);
     }
   }
   
