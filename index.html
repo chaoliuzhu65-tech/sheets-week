@@ -798,19 +798,26 @@ async function loadResult() {
     }
   } catch(e) { console.warn('localStorage load failed:', e); }
   
-  // 0.5. 尝试后端API加载（真正跨设备）
+  // 0.5. 尝试后端API加载（Cloudflare Worker 云端）
   if (_apiBaseUrl) {
     try {
-      const resp = await fetch(_apiBaseUrl + '/api/last-analysis', { timeout: 5000 });
+      console.log('尝试从云端加载数据:', _apiBaseUrl);
+      const resp = await fetch(_apiBaseUrl + '/api/last-analysis', { timeout: 8000 });
+      console.log('云端响应状态:', resp.status);
       if (resp.ok) {
         const json = await resp.json();
-        if (json.success && json.analysis) {
-          showSyncStatus('🖥️ 已从后端服务器加载数据');
+        console.log('云端返回:', JSON.stringify(json).substring(0, 200));
+        // json.analysis 就是完整的分析结果
+        if (json.success && json.analysis && json.analysis.analysis) {
+          showSyncStatus('☁️ 已从云端加载数据');
           _lastResult = json.analysis;
           return json.analysis;
         }
       }
-    } catch(e) { console.warn('后端API加载失败:', e); }
+    } catch(e) { 
+      console.warn('后端API加载失败:', e.message);
+      showSyncStatus('⚠️ 云端加载失败: ' + e.message, true);
+    }
   }
   
   // 0.6. 尝试 Supabase 云同步加载
@@ -1308,8 +1315,14 @@ renderCollectPanel();
 // 页面加载时恢复上次数据
 // ═══════════════════════════════════════════════════════════════
 (async function restoreLastData() {
+  // 显示正在加载状态
+  document.getElementById('uploadStatus').innerHTML =
+    `<div class="alert alert-info py-2 small">
+      <i class="fas fa-sync-alt fa-spin me-1"></i>正在加载数据...
+    </div>`;
+  
   const cached = await loadResult();
-  if (cached) {
+  if (cached && cached.analysis) {
     // 恢复日期标签
     if (cached.week_labels && cached.week_labels.length === 5) {
       _weekLabels = cached.week_labels;
@@ -1318,22 +1331,35 @@ renderCollectPanel();
     const fname = (cached.file_info || {}).filename || '历史数据';
     const atime = (cached.file_info || {}).analysis_time ? new Date(cached.file_info.analysis_time).toLocaleString('zh-CN') : '';
     const fromHash = location.hash.length > 10 ? ' <span class="data-badge">链接分享</span>' : '';
-    const fromCloud = _apiBaseUrl ? ' <span class="data-badge" style="background:#e3f2fd;color:#1565c0;">云端同步</span>' : '';
     document.getElementById('uploadStatus').innerHTML =
-      `<div class="alert alert-success py-2 small"><i class="fas fa-database me-1"></i>已恢复数据：${fname}${atime ? ' ('+atime+')' : ''}${fromHash}${fromCloud}</div>`;
+      `<div class="alert alert-success py-2 small">
+        <i class="fas fa-check-circle me-1"></i>
+        <strong>已加载数据：${fname}</strong>${atime ? ' ('+atime+')' : ''}${fromHash}
+        <br><span style="font-size:11px;color:#666;">数据来源：${_apiBaseUrl ? '☁️ 云端同步' : '📱 本地存储'}</span>
+      </div>`;
   } else {
-    // 检查 localStorage 状态
+    // 检查并显示详细的失败原因
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      document.getElementById('uploadStatus').innerHTML =
-        `<div class="alert alert-warning py-2 small"><i class="fas fa-upload me-1"></i>请上传 Excel 文件进行分析（首次使用需上传文件）</div>
-         <div class="small text-muted mt-2" style="font-size:11px;">
-           <i class="fas fa-info-circle me-1"></i>提示：如需跨设备查看数据，请：
-           <br>1. 在电脑端上传并保存数据
-           <br>2. 点击右下角 📦 按钮查看存储状态
-           <br>3. 首次使用建议添加到手机主屏幕
-         </div>`;
-    }
+    const hasLocal = !!raw;
+    const hasHash = location.hash.length > 10;
+    const reason = [];
+    if (!hasLocal) reason.push('本地存储为空');
+    if (!hasHash) reason.push('URL无参数');
+    if (_apiBaseUrl) reason.push('云端无数据或加载失败');
+    
+    document.getElementById('uploadStatus').innerHTML =
+      `<div class="alert alert-warning py-2 small">
+        <i class="fas fa-exclamation-triangle me-1"></i>
+        <strong>暂无数据</strong><br>
+        <span style="font-size:11px;">原因：${reason.join('，')}</span>
+        <hr style="margin:8px 0;">
+        <i class="fas fa-lightbulb me-1"></i><strong>使用方法：</strong><br>
+        <span style="font-size:11px;">
+        1. 在电脑端上传 Excel 文件<br>
+        2. 数据会自动同步到云端<br>
+        3. 手机打开同一链接即可查看
+        </span>
+      </div>`;
   }
 })();
 
