@@ -579,18 +579,20 @@ const STORAGE_KEY = 'delong_analysis_result';
 // 后端 API 配置（方案B：Flask服务端同步）
 // ═══════════════════════════════════════════════════════════════
 const API_CONFIG_KEY = 'delong_api_config';
-let _apiBaseUrl = ''; // 后端API地址
+// 默认启用 Cloudflare Worker 后端同步
+const DEFAULT_API_URL = 'https://delong-report-sync.chaoliuzhu65.workers.dev';
+let _apiBaseUrl = DEFAULT_API_URL;
 
 function getApiConfig() {
   try {
     const cfg = localStorage.getItem(API_CONFIG_KEY);
-    return cfg ? JSON.parse(cfg) : null;
-  } catch(e) { return null; }
+    return cfg ? JSON.parse(cfg) : { url: DEFAULT_API_URL };
+  } catch(e) { return { url: DEFAULT_API_URL }; }
 }
 
 function initApiConfig() {
   const cfg = getApiConfig();
-  _apiBaseUrl = cfg?.url || '';
+  _apiBaseUrl = cfg?.url || DEFAULT_API_URL;
 }
 
 // ═══════════════════════════════════════════════════════════════
