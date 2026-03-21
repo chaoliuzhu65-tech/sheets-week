@@ -1572,14 +1572,24 @@ function loadFromCloudflare(urlUid, statusEl) {
   var callbackName = 'cfCallback_' + Math.random().toString(36).substr(2, 9);
   var url = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=' + callbackName;
   
-  alert('调试: 开始加载JSONP, url=' + url.substring(0, 60) + '...');
+  alert('调试: 开始加载JSONP, url=' + url.substring(0, 50) + '...');
   
   var script = document.createElement('script');
+  // 增加超时时间到20秒，国内网络访问Cloudflare可能较慢
   var timeout = setTimeout(function() {
     cleanup();
-    alert('调试: JSONP超时');
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">云端加载超时，请检查网络或刷新重试</div>';
-  }, 10000);
+    alert('调试: JSONP超时(20秒)');
+    // 超时后显示更友好的提示
+    statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
+      '<strong>网络较慢</strong><br>' +
+      '正在尝试备用方式加载...<br>' +
+      '<button class="btn btn-sm btn-primary mt-1" onclick="location.reload()">刷新重试</button>' +
+      '</div>';
+    // 尝试直接重载
+    setTimeout(function() {
+      location.reload();
+    }, 3000);
+  }, 20000);
   
   function cleanup() {
     clearTimeout(timeout);
