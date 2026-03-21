@@ -1421,56 +1421,78 @@ function diagnoseNetwork(urlUid) {
   }, 500);
 }
 
-// 最简单的加载方式 - 尝试多个API端点
+// 最简单的加载方式 - 直接读取同域JSON文件
 function simpleLoad(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
   
-  // 多个API端点（按优先级）
-  var apiEndpoints = [
-    { name: 'Cloudflare', url: 'https://delong-report-sync.chaoliuzhu65.workers.dev' },
-    { name: 'AllOrigins', url: 'https://api.allorigins.win/raw?url=https://delong-report-sync.chaoliuzhu65.workers.dev' }
-  ];
+  // 方案1: 直接读取同域JSON文件（无跨域问题）
+  var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
+  statusEl.innerHTML += '<br>读取本地数据...';
   
-  var currentIndex = 0;
+  var xhr = new XMLHttpRequest();
+  var timeoutId = setTimeout(function() {
+    xhr.abort();
+    statusEl.innerHTML += '无本地数据';
+    // 尝试云端
+    tryCloudflare(urlUid);
+  }, 3000);
   
-  function tryNextEndpoint() {
-    if (currentIndex >= apiEndpoints.length) {
-      statusEl.innerHTML += '<br><strong>所有API都失败</strong><br>建议切换4G/5G网络';
-      return;
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      clearTimeout(timeoutId);
+      if (xhr.status === 200) {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          statusEl.innerHTML += '成功!';
+          handleCloudData(data, urlUid, statusEl);
+        } catch(e) {
+          statusEl.innerHTML += '解析失败';
+          tryCloudflare(urlUid);
+        }
+      } else {
+        statusEl.innerHTML += '无数据';
+        tryCloudflare(urlUid);
+      }
     }
-    
-    var endpoint = apiEndpoints[currentIndex++];
-    var requestUrl = endpoint.url + '/api/last-analysis?tenant=uid_' + urlUid + '&_=' + Date.now();
-    
-    statusEl.innerHTML += '<br>尝试' + endpoint.name + '...';
-    
-    // 使用JSONP
-    var script = document.createElement('script');
-    var callbackName = 'cb' + Date.now();
-    var timeoutId = setTimeout(function() {
-      if (script.parentNode) document.head.removeChild(script);
-      statusEl.innerHTML += '超时';
-      tryNextEndpoint();
-    }, 4000);
-    
-    window[callbackName] = function(data) {
-      clearTimeout(timeoutId);
-      if (script.parentNode) document.head.removeChild(script);
-      statusEl.innerHTML += '成功!';
-      handleCloudData(data, urlUid, statusEl);
-    };
-    
-    script.src = requestUrl + '&callback=' + callbackName;
-    script.onerror = function() {
-      clearTimeout(timeoutId);
-      statusEl.innerHTML += '失败';
-      tryNextEndpoint();
-    };
-    
-    document.head.appendChild(script);
-  }
+  };
   
-  tryNextEndpoint();
+  xhr.onerror = function() {
+    clearTimeout(timeoutId);
+    statusEl.innerHTML += '读取失败';
+    tryCloudflare(urlUid);
+  };
+  
+  xhr.open('GET', jsonUrl, true);
+  xhr.send();
+}
+
+// 备用: 尝试Cloudflare
+function tryCloudflare(urlUid) {
+  var statusEl = document.getElementById('uploadStatus');
+  statusEl.innerHTML += '<br>尝试云端...';
+  
+  var requestUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=cloudCallback&_=' + Date.now();
+  
+  var script = document.createElement('script');
+  var timeoutId = setTimeout(function() {
+    if (script.parentNode) document.head.removeChild(script);
+    statusEl.innerHTML += '超时<br><strong>建议: 电脑端先上传数据</strong>';
+  }, 5000);
+  
+  window.cloudCallback = function(data) {
+    clearTimeout(timeoutId);
+    if (script.parentNode) document.head.removeChild(script);
+    statusEl.innerHTML += '成功!';
+    handleCloudData(data, urlUid, statusEl);
+  };
+  
+  script.src = requestUrl;
+  script.onerror = function() {
+    clearTimeout(timeoutId);
+    statusEl.innerHTML += '失败<br><strong>建议: 电脑端先上传数据</strong>';
+  };
+  
+  document.head.appendChild(script);
 }
 
 // 从本地加载（电脑端）
