@@ -1421,75 +1421,56 @@ function diagnoseNetwork(urlUid) {
   }, 500);
 }
 
-// 最简单的加载方式
+// 最简单的加载方式 - 尝试多个API端点
 function simpleLoad(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
-  var apiUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev';
-  var requestUrl = apiUrl + '/api/last-analysis?tenant=uid_' + urlUid + '&_=' + Date.now();
   
-  statusEl.innerHTML += '<br>请求: ' + requestUrl.substring(0, 50) + '...';
+  // 多个API端点（按优先级）
+  var apiEndpoints = [
+    { name: 'Cloudflare', url: 'https://delong-report-sync.chaoliuzhu65.workers.dev' },
+    { name: 'AllOrigins', url: 'https://api.allorigins.win/raw?url=https://delong-report-sync.chaoliuzhu65.workers.dev' }
+  ];
   
-  // 方法1: JSONP
-  var script = document.createElement('script');
-  var callbackName = 'cb' + Date.now();
-  var timeoutId = setTimeout(function() {
-    document.head.removeChild(script);
-    statusEl.innerHTML += '<br>JSONP超时，尝试XHR...';
-    tryXHR();
-  }, 3000);
+  var currentIndex = 0;
   
-  window[callbackName] = function(data) {
-    clearTimeout(timeoutId);
-    document.head.removeChild(script);
-    statusEl.innerHTML += '<br>JSONP成功!';
-    handleCloudData(data, urlUid, statusEl);
-  };
-  
-  script.src = requestUrl + '&callback=' + callbackName;
-  script.onerror = function() {
-    clearTimeout(timeoutId);
-    statusEl.innerHTML += '<br>JSONP失败，尝试XHR...';
-    tryXHR();
-  };
-  
-  document.head.appendChild(script);
-  
-  // 方法2: XHR
-  function tryXHR() {
-    var xhr = new XMLHttpRequest();
-    var xhrTimeout = setTimeout(function() {
-      xhr.abort();
-      statusEl.innerHTML += '<br>XHR也超时';
-      statusEl.innerHTML += '<br><strong>建议: 切换4G/5G网络</strong>';
-    }, 5000);
+  function tryNextEndpoint() {
+    if (currentIndex >= apiEndpoints.length) {
+      statusEl.innerHTML += '<br><strong>所有API都失败</strong><br>建议切换4G/5G网络';
+      return;
+    }
     
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState === 4) {
-        clearTimeout(xhrTimeout);
-        if (xhr.status === 200) {
-          try {
-            var data = JSON.parse(xhr.responseText);
-            statusEl.innerHTML += '<br>XHR成功!';
-            handleCloudData(data, urlUid, statusEl);
-          } catch(e) {
-            statusEl.innerHTML += '<br>解析失败';
-          }
-        } else {
-          statusEl.innerHTML += '<br>XHR失败: ' + xhr.status;
-        }
-      }
+    var endpoint = apiEndpoints[currentIndex++];
+    var requestUrl = endpoint.url + '/api/last-analysis?tenant=uid_' + urlUid + '&_=' + Date.now();
+    
+    statusEl.innerHTML += '<br>尝试' + endpoint.name + '...';
+    
+    // 使用JSONP
+    var script = document.createElement('script');
+    var callbackName = 'cb' + Date.now();
+    var timeoutId = setTimeout(function() {
+      if (script.parentNode) document.head.removeChild(script);
+      statusEl.innerHTML += '超时';
+      tryNextEndpoint();
+    }, 4000);
+    
+    window[callbackName] = function(data) {
+      clearTimeout(timeoutId);
+      if (script.parentNode) document.head.removeChild(script);
+      statusEl.innerHTML += '成功!';
+      handleCloudData(data, urlUid, statusEl);
     };
     
-    xhr.onerror = function() {
-      clearTimeout(xhrTimeout);
-      statusEl.innerHTML += '<br>XHR网络错误';
-      statusEl.innerHTML += '<br><strong>建议: 切换4G/5G网络</strong>';
+    script.src = requestUrl + '&callback=' + callbackName;
+    script.onerror = function() {
+      clearTimeout(timeoutId);
+      statusEl.innerHTML += '失败';
+      tryNextEndpoint();
     };
     
-    xhr.open('GET', requestUrl, true);
-    xhr.setRequestHeader('Accept', 'application/json');
-    xhr.send();
+    document.head.appendChild(script);
   }
+  
+  tryNextEndpoint();
 }
 
 // 从本地加载（电脑端）
