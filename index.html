@@ -1406,11 +1406,32 @@ renderCollectPanel();
 // 页面加载完成后执行数据恢复
 (function initPage() {
   try {
-    var urlParams = new URLSearchParams(location.search);
-    var urlUid = urlParams.get('uid');
+    // 兼容方式获取 URL 参数
+    var urlUid = null;
+    var search = location.search;
     
     // 调试信息
-    console.log('initPage: location.search=', location.search);
+    console.log('initPage: location.search=', search);
+    console.log('initPage: location.href=', location.href);
+    
+    // 方法1: URLSearchParams
+    if (typeof URLSearchParams !== 'undefined' && search) {
+      try {
+        var urlParams = new URLSearchParams(search);
+        urlUid = urlParams.get('uid');
+      } catch(e) {
+        console.log('URLSearchParams failed:', e);
+      }
+    }
+    
+    // 方法2: 正则解析（兼容旧浏览器）
+    if (!urlUid && search) {
+      var match = search.match(/[?&]uid=([^&]+)/);
+      if (match) {
+        urlUid = decodeURIComponent(match[1]);
+      }
+    }
+    
     console.log('initPage: urlUid=', urlUid);
     
     // 获取当前用户ID
