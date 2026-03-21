@@ -1577,14 +1577,8 @@ function loadFromCloudflare(urlUid, statusEl) {
     console.log('Cloudflare返回:', data);
     if (data && data.success && data.analysis) {
       // Cloudflare 返回的数据结构: {success, analysis: {file_info, data_summary, analysis: {groups}}}
-      var result = data.analysis;
-      // 检查数据结构 - 可能是 result.analysis.groups 或 result.data_summary
-      if (result.data_summary || (result.analysis && result.analysis.groups)) {
-        handleCloudData(result, urlUid, statusEl);
-      } else {
-        console.log('数据格式不匹配:', result);
-        statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据格式错误</div>';
-      }
+      // 直接传递给 handleCloudData，它期望 {success, analysis} 结构
+      handleCloudData(data, urlUid, statusEl);
     } else if (data && data.success === false) {
       statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
         '<strong>暂无数据</strong><br>' +
