@@ -2033,36 +2033,42 @@ async function clearCloudData() {
     return;
   }
   
-  if (!confirm(`⚠️ 确定要清空云端数据吗？\n\n租户: ${tenant}\n此操作不可恢复！`)) {
+  if (!confirm(`⚠️ 确定要清空数据吗？\n\n用户: ${tenant}\n此操作将清空本地和云端数据！`)) {
     return;
   }
   
   try {
-    showSyncStatus('正在清空云端数据...');
+    showSyncStatus('正在清空数据...');
     
-    const resp = await fetch(_apiBaseUrl + '/api/clear?' + new URLSearchParams({
-      tenant: tenant,
-      secret: secret
-    }), {
-      method: 'POST'
-    });
-    
-    const json = await resp.json();
-    
-    if (json.success) {
-      // 清空本地数据
-      localStorage.removeItem('delong_cached_analysis');
-      localStorage.removeItem('delong_cached_hash');
-      
-      showSyncStatus('✅ 云端数据已清空');
-      alert('云端数据已清空！页面将刷新...');
-      
-      // 刷新页面以更新显示
-      location.reload();
-    } else {
-      showSyncStatus('❌ 清空失败: ' + (json.error || '未知错误'));
-      alert('清空失败: ' + (json.error || '未知错误'));
+    // 1. 清空 Cloudflare Worker 数据
+    var cfCleared = false;
+    try {
+      const resp = await fetch(_apiBaseUrl + '/api/clear?' + new URLSearchParams({
+        tenant: tenant,
+        secret: secret
+      }), {
+        method: 'POST'
+      });
+      const json = await resp.json();
+      cfCleared = json.success;
+    } catch(e) {
+      console.warn('Cloudflare清空失败:', e);
     }
+    
+    // 2. 清空本地数据
+    localStorage.removeItem('delong_cached_analysis');
+    localStorage.removeItem('delong_cached_hash');
+    localStorage.removeItem(STORAGE_KEY);
+    
+    // 3. 清空本地显示
+    _lastResult = null;
+    _groups = [];
+    
+    showSyncStatus('✅ 数据已清空' + (cfCleared ? '(含云端)' : '(仅本地)'));
+    alert('数据已清空！页面将刷新...');
+    
+    // 刷新页面
+    location.reload();
   } catch(e) {
     showSyncStatus('❌ 清空失败: ' + e.message);
     alert('清空失败: ' + e.message);
