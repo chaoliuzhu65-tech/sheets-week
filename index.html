@@ -177,7 +177,7 @@
     .mom-row .mval  { flex-shrink: 0; font-weight: 700; margin-left: 6px; }
 
     .chart-wrap {
-      background: #fff; border-radius: 10px; overflow: hidden;
+      background: #fff; border-radius: 10px; overflow: visible;
       box-shadow: 0 1px 6px rgba(0,0,0,.05); margin-bottom: 12px;
     }
     .chart-title { padding: 10px 14px; font-size: 12px; font-weight: 600; background: #fafafa;
@@ -1539,10 +1539,10 @@ function loadJsonData(urlUid) {
     if (script.parentNode) document.head.removeChild(script);
     try { delete window[checkCallback]; } catch(e) {}
     
-    if (data && data.success) {
-      // Cloudflare 有数据，读取 JSON 文件
+    if (data && data.success && data.analysis) {
+      // Cloudflare 有数据，直接使用
       statusEl.innerHTML = '<div class="alert alert-info py-2 small">加载数据中...</div>';
-      loadJsonFile(urlUid, statusEl);
+      handleCloudData(data, urlUid, statusEl);
     } else {
       // Cloudflare 返回失败（无数据）
       statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
