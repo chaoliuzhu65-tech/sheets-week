@@ -349,10 +349,7 @@
             </div>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-danger btn-sm flex-fill" onclick="clearCloudData()">
-              <i class="fas fa-trash-alt me-1"></i>清空云端数据
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" onclick="changeUserId()">
+            <button class="btn btn-outline-secondary btn-sm flex-fill" onclick="changeUserId()">
               <i class="fas fa-edit me-1"></i>修改ID
             </button>
           </div>
@@ -833,10 +830,6 @@ async function saveResult(result) {
   const tenantId = getTenantId();
   result.tenant_id = tenantId;
   const jsonStr = JSON.stringify(result);
-  
-  // 清除"数据已清空"标记（因为正在保存新数据）
-  localStorage.removeItem('delong_data_cleared');
-  localStorage.removeItem('delong_cleared_time');
   
   // 1. localStorage
   try { 
@@ -1601,13 +1594,6 @@ function loadJsonFile(urlUid, statusEl) {
       if (xhr.status === 200) {
         try {
           var data = JSON.parse(xhr.responseText);
-          // 检查是否是清空标记
-          if (data && data.cleared === true) {
-            statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
-            localStorage.setItem('delong_data_cleared', 'true');
-            return;
-          }
-          // 正常数据
           handleCloudData(data, urlUid, statusEl);
         } catch(e) {
           statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
@@ -1632,14 +1618,6 @@ function loadJsonFile(urlUid, statusEl) {
 
 // 从本地加载（电脑端）
 function loadFromLocal() {
-  // 检查数据是否已被清空
-  var isCleared = localStorage.getItem('delong_data_cleared');
-  if (isCleared === 'true') {
-    document.getElementById('uploadStatus').innerHTML = 
-      '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
-    return;
-  }
-  
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -2256,64 +2234,6 @@ function clearApiConfig() {
     _apiBaseUrl = '';
     updateApiConfigUI();
     showSyncStatus('已断开后端服务器');
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// 云端数据清空功能
-// ═══════════════════════════════════════════════════════════════
-async function clearCloudData() {
-  const tenant = getTenantId();
-  const secret = ADMIN_SECRET;
-  
-  if (!tenant || tenant.length < 4) {
-    alert('请先设置有效的用户ID');
-    return;
-  }
-  
-  if (!confirm(`⚠️ 确定要清空数据吗？\n\n用户: ${tenant}\n此操作将清空所有数据！`)) {
-    return;
-  }
-  
-  try {
-    showSyncStatus('正在清空数据...');
-    
-    // 1. 清空 Cloudflare Worker 数据
-    var cfCleared = false;
-    try {
-      const resp = await fetch(_apiBaseUrl + '/api/clear?' + new URLSearchParams({
-        tenant: tenant,
-        secret: secret
-      }), {
-        method: 'POST'
-      });
-      const json = await resp.json();
-      cfCleared = json.success;
-    } catch(e) {
-      console.warn('Cloudflare清空失败:', e);
-    }
-    
-    // 2. 清空所有本地数据
-    localStorage.removeItem('delong_cached_analysis');
-    localStorage.removeItem('delong_cached_hash');
-    localStorage.removeItem(STORAGE_KEY);
-    
-    // 3. 标记数据已清空（防止从JSON文件恢复旧数据）
-    localStorage.setItem('delong_data_cleared', 'true');
-    localStorage.setItem('delong_cleared_time', Date.now().toString());
-    
-    // 4. 清空本地显示
-    _lastResult = null;
-    _groups = [];
-    
-    showSyncStatus('✅ 数据已清空');
-    alert('数据已清空！页面将刷新...');
-    
-    // 刷新页面
-    location.reload();
-  } catch(e) {
-    showSyncStatus('❌ 清空失败: ' + e.message);
-    alert('清空失败: ' + e.message);
   }
 }
 
