@@ -1518,56 +1518,9 @@ function loadJsonData(urlUid) {
     return;
   }
   
-  statusEl.innerHTML = '<div class="alert alert-info py-2 small">检查数据状态...</div>';
-  
-  // 使用 JSONP 检查 Cloudflare（避免跨域问题）
-  var checkCallback = 'checkCb_' + Date.now();
-  var checkUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=' + checkCallback + '&_=' + Date.now();
-  
-  var script = document.createElement('script');
-  var isTimeout = false;
-  var timeoutId = setTimeout(function() {
-    isTimeout = true;
-    // JSONP 超时，说明无数据
-    if (script.parentNode) document.head.removeChild(script);
-    try { delete window[checkCallback]; } catch(e) {}
-    statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
-    localStorage.setItem('delong_data_cleared', 'true');
-  }, 5000);
-  
-  window[checkCallback] = function(data) {
-    clearTimeout(timeoutId);
-    if (script.parentNode) document.head.removeChild(script);
-    try { delete window[checkCallback]; } catch(e) {}
-    
-    // Cloudflare 返回的数据结构: {success, analysis: {file_info, data_summary, analysis: {groups}}}
-    if (data && data.success && data.analysis && data.analysis.analysis && data.analysis.analysis.groups) {
-      // Cloudflare 有数据，直接使用
-      statusEl.innerHTML = '<div class="alert alert-info py-2 small">加载数据中...</div>';
-      handleCloudData(data.analysis, urlUid, statusEl);
-    } else if (data && data.success === false) {
-      // Cloudflare 返回失败（无数据）
-      statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
-      localStorage.setItem('delong_data_cleared', 'true');
-    } else {
-      // 未知状态，尝试读取 JSON 文件
-      statusEl.innerHTML = '<div class="alert alert-info py-2 small">尝试加载本地数据...</div>';
-      loadJsonFile(urlUid, statusEl);
-    }
-  };
-  
-  script.onerror = function() {
-    clearTimeout(timeoutId);
-    if (script.parentNode) document.head.removeChild(script);
-    try { delete window[checkCallback]; } catch(e) {}
-    // JSONP 错误，如果还没超时，尝试读取 JSON 文件
-    if (!isTimeout) {
-      loadJsonFile(urlUid, statusEl);
-    }
-  };
-  
-  script.src = checkUrl;
-  document.head.appendChild(script);
+  // 直接读取 JSON 文件（最简单可靠的方式）
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small">加载数据中...</div>';
+  loadJsonFile(urlUid, statusEl);
 }
 
 // 读取 JSON 文件
