@@ -1568,7 +1568,10 @@ function loadJsonData(urlUid) {
 
 // 从 GitHub JSON 文件加载数据（纯静态方案，无需Cloudflare）
 function loadFromGithubJson(urlUid, statusEl) {
-  var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
+  // 统一使用首字母大写的格式（与GitHub上的文件名一致）
+  var normalizedUid = urlUid.charAt(0).toUpperCase() + urlUid.slice(1).toLowerCase();
+  var jsonUrl = './data/' + normalizedUid + '.json?_=' + Date.now();
+  console.log('loadFromGithubJson: 原始uid=' + urlUid + ', 规范化=' + normalizedUid);
   
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
@@ -1616,7 +1619,9 @@ function loadFromGithubJson(urlUid, statusEl) {
 
 // 读取 JSON 文件
 function loadJsonFile(urlUid, statusEl) {
-  var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
+  // 统一使用首字母大写的格式
+  var normalizedUid = urlUid.charAt(0).toUpperCase() + urlUid.slice(1).toLowerCase();
+  var jsonUrl = './data/' + normalizedUid + '.json?_=' + Date.now();
   
   console.log('loadJsonFile: jsonUrl=', jsonUrl);
   
