@@ -733,7 +733,7 @@ const API_CONFIG_KEY = 'delong_api_config';
 // 腾讯云同步服务（国内访问稳定）
 const TENCENT_API_URL = 'http://43.128.106.187';
 // ⚠️ 请修改为你的密码！不要分享给他人！
-const ADMIN_SECRET = '1234';
+let ADMIN_SECRET = '1234';
 // Cloudflare Worker（备用）
 const CF_API_URL = 'https://delong-report-sync.chaoliuzhu65.workers.dev';
 // 默认使用腾讯云
@@ -1001,7 +1001,7 @@ async function loadResult() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
     
-    const resp = await fetch(DEFAULT_API_URL + '/api/last-analysis?' + new URLSearchParams({
+    const resp = await fetch((_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?' + new URLSearchParams({
       tenant: _tenantId
     }), { 
       signal: controller.signal,
@@ -2043,6 +2043,7 @@ function saveUserId() {
 
 // 把本地数据重新推送到云端（使用当前用户ID）
 async function resyncToCloud() {
+  initApiConfig(); // 确保 API 配置已初始化
   const badge = document.getElementById('cloudSyncBadge');
   if (badge) { badge.className = 'ms-2 badge bg-warning'; badge.textContent = '同步中...'; }
   
@@ -2075,7 +2076,7 @@ async function resyncToCloud() {
   
   // 推送到云端
   try {
-    const resp = await fetch(DEFAULT_API_URL + '/api/sync?' + new URLSearchParams({ tenant: tenantId, secret: ADMIN_SECRET }), {
+    const resp = await fetch((_apiBaseUrl || DEFAULT_API_URL) + '/api/sync?' + new URLSearchParams({ tenant: tenantId, secret: ADMIN_SECRET }), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: jsonStr
