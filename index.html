@@ -1539,14 +1539,19 @@ function loadJsonData(urlUid) {
     if (script.parentNode) document.head.removeChild(script);
     try { delete window[checkCallback]; } catch(e) {}
     
-    if (data && data.success && data.analysis) {
+    // Cloudflare 返回的数据结构: {success, analysis: {file_info, data_summary, analysis: {groups}}}
+    if (data && data.success && data.analysis && data.analysis.analysis && data.analysis.analysis.groups) {
       // Cloudflare 有数据，直接使用
       statusEl.innerHTML = '<div class="alert alert-info py-2 small">加载数据中...</div>';
-      handleCloudData(data, urlUid, statusEl);
-    } else {
+      handleCloudData(data.analysis, urlUid, statusEl);
+    } else if (data && data.success === false) {
       // Cloudflare 返回失败（无数据）
       statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
       localStorage.setItem('delong_data_cleared', 'true');
+    } else {
+      // 未知状态，尝试读取 JSON 文件
+      statusEl.innerHTML = '<div class="alert alert-info py-2 small">尝试加载本地数据...</div>';
+      loadJsonFile(urlUid, statusEl);
     }
   };
   
@@ -2037,9 +2042,9 @@ function buildGroupSection(g, idx) {
       </tbody></table></div>
   </div>`;
 
-  const chartHtml = `<div class="chart-wrap">
+  const chartHtml = `<div class="chart-wrap" style="margin-top:10px;">
     <div class="chart-title"><i class="fas fa-chart-bar text-primary me-1"></i>最新周数值分布（Top 20）</div>
-    <div class="chart-scroll">
+    <div class="chart-scroll" style="padding:10px 0;">
       <div id="chart_${idx}" style="height:240px;min-width:${Math.max(ranking.slice(0,20).length*40,320)}px;"></div>
     </div>
   </div>`;
