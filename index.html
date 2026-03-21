@@ -1510,7 +1510,7 @@ function showToast(msg) {
 function loadJsonData(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
   
-  // 检查数据是否已被清空
+  // 检查数据是否已被清空（本地标记）
   var isCleared = localStorage.getItem('delong_data_cleared');
   if (isCleared === 'true') {
     statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
@@ -1519,6 +1519,45 @@ function loadJsonData(urlUid) {
   
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
+  // 先检查 Cloudflare 是否有数据（判断数据是否被清空）
+  var checkUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&_=' + Date.now();
+  
+  var checkXhr = new XMLHttpRequest();
+  checkXhr.timeout = 3000;
+  
+  checkXhr.onreadystatechange = function() {
+    if (checkXhr.readyState === 4) {
+      if (checkXhr.status === 404) {
+        // Cloudflare 无数据，说明已清空
+        statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
+        // 标记本地已清空
+        localStorage.setItem('delong_data_cleared', 'true');
+      } else if (checkXhr.status === 200) {
+        // Cloudflare 有数据，读取 JSON 文件
+        loadJsonFile(urlUid, statusEl);
+      } else {
+        // 检查失败，尝试读取 JSON 文件
+        loadJsonFile(urlUid, statusEl);
+      }
+    }
+  };
+  
+  checkXhr.ontimeout = function() {
+    // 超时，尝试读取 JSON 文件
+    loadJsonFile(urlUid, statusEl);
+  };
+  
+  checkXhr.onerror = function() {
+    // 错误，尝试读取 JSON 文件
+    loadJsonFile(urlUid, statusEl);
+  };
+  
+  checkXhr.open('GET', checkUrl, true);
+  checkXhr.send();
+}
+
+// 读取 JSON 文件
+function loadJsonFile(urlUid, statusEl) {
   var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
   
   var xhr = new XMLHttpRequest();
