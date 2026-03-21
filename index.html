@@ -1378,8 +1378,8 @@ renderCollectPanel();
       console.log('initPage: 检测到uid参数,开始云端加载');
       // 使用setTimeout确保DOM已就绪
       setTimeout(function() {
-        // 先测试网络连通性
-        testNetworkAndLoad(urlUid);
+        // 使用诊断模式
+        diagnoseNetwork(urlUid);
       }, 100);
     } else {
       // 电脑端：从本地加载（不显示加载状态）
@@ -1397,9 +1397,54 @@ function testNetworkAndLoad(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在检测网络...</div>';
   
-  // 方法1: 直接加载数据（跳过复杂检测）
+  // 方法1: 直接加载数据
   console.log('直接开始加载数据');
   loadFromCloud(urlUid);
+}
+
+// 网络诊断函数
+function diagnoseNetwork(urlUid) {
+  var statusEl = document.getElementById('uploadStatus');
+  var results = [];
+  
+  function log(msg) {
+    console.log(msg);
+    results.push(msg);
+    statusEl.innerHTML = '<div class="alert alert-info py-2 small">' + results.join('<br>') + '</div>';
+  }
+  
+  log('开始诊断...');
+  
+  // 测试1: 检测fetch支持
+  if (window.fetch) {
+    log('✓ 支持fetch');
+  } else {
+    log('✗ 不支持fetch');
+  }
+  
+  // 测试2: 检测XHR
+  if (window.XMLHttpRequest) {
+    log('✓ 支持XHR');
+  } else {
+    log('✗ 不支持XHR');
+  }
+  
+  // 测试3: 尝试访问云端健康接口
+  log('测试云端连接...');
+  var img = new Image();
+  var startTime = Date.now();
+  img.onload = function() {
+    log('✓ 云端图片可达(' + (Date.now()-startTime) + 'ms)');
+    // 继续加载数据
+    loadFromCloud(urlUid);
+  };
+  img.onerror = function() {
+    log('✗ 云端图片失败');
+    // 仍然尝试加载
+    loadFromCloud(urlUid);
+  };
+  // 使用favicon测试
+  img.src = 'https://delong-report-sync.chaoliuzhu65.workers.dev/favicon.ico?_=' + Date.now();
 }
 
 // 从本地加载（电脑端）
