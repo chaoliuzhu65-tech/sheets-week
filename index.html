@@ -1517,43 +1517,47 @@ function loadJsonData(urlUid) {
     return;
   }
   
-  statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small">检查数据状态...</div>';
   
-  // 先检查 Cloudflare 是否有数据（判断数据是否被清空）
-  var checkUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&_=' + Date.now();
+  // 使用 JSONP 检查 Cloudflare（避免跨域问题）
+  var checkCallback = 'checkCb_' + Date.now();
+  var checkUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=' + checkCallback + '&_=' + Date.now();
   
-  var checkXhr = new XMLHttpRequest();
-  checkXhr.timeout = 3000;
+  var script = document.createElement('script');
+  var timeoutId = setTimeout(function() {
+    // JSONP 超时，说明无数据或网络问题
+    if (script.parentNode) document.head.removeChild(script);
+    try { delete window[checkCallback]; } catch(e) {}
+    statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
+    localStorage.setItem('delong_data_cleared', 'true');
+  }, 3000);
   
-  checkXhr.onreadystatechange = function() {
-    if (checkXhr.readyState === 4) {
-      if (checkXhr.status === 404) {
-        // Cloudflare 无数据，说明已清空
-        statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
-        // 标记本地已清空
-        localStorage.setItem('delong_data_cleared', 'true');
-      } else if (checkXhr.status === 200) {
-        // Cloudflare 有数据，读取 JSON 文件
-        loadJsonFile(urlUid, statusEl);
-      } else {
-        // 检查失败，尝试读取 JSON 文件
-        loadJsonFile(urlUid, statusEl);
-      }
+  window[checkCallback] = function(data) {
+    clearTimeout(timeoutId);
+    if (script.parentNode) document.head.removeChild(script);
+    try { delete window[checkCallback]; } catch(e) {}
+    
+    if (data && data.success) {
+      // Cloudflare 有数据，读取 JSON 文件
+      statusEl.innerHTML = '<div class="alert alert-info py-2 small">加载数据中...</div>';
+      loadJsonFile(urlUid, statusEl);
+    } else {
+      // Cloudflare 返回失败（无数据）
+      statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
+      localStorage.setItem('delong_data_cleared', 'true');
     }
   };
   
-  checkXhr.ontimeout = function() {
-    // 超时，尝试读取 JSON 文件
+  script.onerror = function() {
+    clearTimeout(timeoutId);
+    if (script.parentNode) document.head.removeChild(script);
+    try { delete window[checkCallback]; } catch(e) {}
+    // JSONP 错误，尝试直接读取 JSON 文件
     loadJsonFile(urlUid, statusEl);
   };
   
-  checkXhr.onerror = function() {
-    // 错误，尝试读取 JSON 文件
-    loadJsonFile(urlUid, statusEl);
-  };
-  
-  checkXhr.open('GET', checkUrl, true);
-  checkXhr.send();
+  script.src = checkUrl;
+  document.head.appendChild(script);
 }
 
 // 读取 JSON 文件
