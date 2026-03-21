@@ -1409,6 +1409,10 @@ renderCollectPanel();
     var urlParams = new URLSearchParams(location.search);
     var urlUid = urlParams.get('uid');
     
+    // 调试信息
+    console.log('initPage: location.search=', location.search);
+    console.log('initPage: urlUid=', urlUid);
+    
     // 获取当前用户ID
     var currentUserId = localStorage.getItem(TENANT_KEY);
     
@@ -1511,6 +1515,8 @@ function showToast(msg) {
 function loadJsonData(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
   
+  console.log('loadJsonData: urlUid=', urlUid);
+  
   // 直接读取 JSON 文件（同域，最可靠）
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">加载数据中...</div>';
   loadJsonFile(urlUid, statusEl);
@@ -1557,8 +1563,11 @@ function loadFromCloudflare(urlUid, statusEl) {
 function loadJsonFile(urlUid, statusEl) {
   var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
   
+  console.log('loadJsonFile: jsonUrl=', jsonUrl);
+  
   var xhr = new XMLHttpRequest();
   xhr.onreadystatechange = function() {
+    console.log('loadJsonFile: readyState=', xhr.readyState, 'status=', xhr.status);
     if (xhr.readyState === 4) {
       if (xhr.status === 200) {
         try {
