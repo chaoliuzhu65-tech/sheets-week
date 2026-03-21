@@ -1370,15 +1370,16 @@ renderCollectPanel();
 // 页面加载完成后执行数据恢复
 (function initPage() {
   try {
-    const urlParams = new URLSearchParams(location.search);
-    const urlUid = urlParams.get('uid');
+    var urlParams = new URLSearchParams(location.search);
+    var urlUid = urlParams.get('uid');
     
     if (urlUid) {
       // 手机端/跨设备访问：从云端加载
       console.log('initPage: 检测到uid参数,开始云端加载');
       // 使用setTimeout确保DOM已就绪
       setTimeout(function() {
-        loadFromCloud(urlUid);
+        // 先测试网络连通性
+        testNetworkAndLoad(urlUid);
       }, 100);
     } else {
       // 电脑端：从本地加载（不显示加载状态）
@@ -1390,6 +1391,16 @@ renderCollectPanel();
       '<div class="alert alert-danger py-2 small">页面初始化失败: ' + e.message + '</div>';
   }
 })();
+
+// 测试网络连通性
+function testNetworkAndLoad(urlUid) {
+  var statusEl = document.getElementById('uploadStatus');
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在检测网络...</div>';
+  
+  // 方法1: 直接加载数据（跳过复杂检测）
+  console.log('直接开始加载数据');
+  loadFromCloud(urlUid);
+}
 
 // 从本地加载（电脑端）
 function loadFromLocal() {
@@ -1424,153 +1435,98 @@ function loadFromLocal() {
      </div>`;
 }
 
-// 从云端加载（手机端）- 带重试机制
-function loadFromCloud(urlUid, retryCount) {
-  retryCount = retryCount || 0;
-  var MAX_RETRIES = 2;
-  
+// 从云端加载（手机端）- 最简单可靠的实现
+function loadFromCloud(urlUid) {
   // 初始化配置和租户ID
   initApiConfig();
   _tenantId = getTenantId();
   
-  console.log('loadFromCloud start:', 'tenantId=', _tenantId, 'retry=', retryCount);
+  console.log('loadFromCloud:', 'tenantId=', _tenantId);
   
-  // 显示加载状态
   var statusEl = document.getElementById('uploadStatus');
   if (!statusEl) {
     console.error('uploadStatus元素不存在');
     return;
   }
   
-  var loadingText = retryCount > 0 ? '正在重试 (' + retryCount + '/' + MAX_RETRIES + ')...' : '正在从云端加载...';
-  statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-download-alt me-1"></i>' + loadingText + '</div>';
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载...</div>';
   
-  // 构建请求URL - 添加时间戳防止缓存
-  var requestUrl = (_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId) + '&_t=' + Date.now();
-  console.log('请求URL:', requestUrl);
+  // 构建请求URL
+  var apiUrl = _apiBaseUrl || DEFAULT_API_URL;
+  var requestUrl = apiUrl + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
+  console.log('请求:', requestUrl);
   
-  // 方法1: 优先使用fetch（现代浏览器）
-  if (window.fetch) {
-    console.log('使用fetch API');
-    var fetchTimeout = setTimeout(function() {
-      console.log('fetch超时(8秒)，降级到XHR');
-      tryFetchWithXHR(requestUrl, urlUid, statusEl, retryCount, MAX_RETRIES);
-    }, 8000);
-    
-    fetch(requestUrl, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      mode: 'cors',
-      cache: 'no-cache'
-    }).then(function(response) {
-      clearTimeout(fetchTimeout);
-      console.log('fetch响应:', response.status);
-      if (response.ok) {
-        return response.json();
-      } else {
-        throw new Error('HTTP ' + response.status);
-      }
-    }).then(function(json) {
-      console.log('fetch数据解析成功');
-      handleCloudData(json, urlUid, statusEl);
-    }).catch(function(err) {
-      clearTimeout(fetchTimeout);
-      console.error('fetch失败:', err.message);
-      // 降级到XHR
-      tryFetchWithXHR(requestUrl, urlUid, statusEl, retryCount, MAX_RETRIES);
-    });
-  } else {
-    // 旧浏览器直接使用XHR
-    console.log('浏览器不支持fetch，使用XHR');
-    tryFetchWithXHR(requestUrl, urlUid, statusEl, retryCount, MAX_RETRIES);
+  // 使用jQuery风格的JSONP（如果支持）或简单XHR
+  var script = document.createElement('script');
+  var callbackName = 'cloudCallback_' + Date.now();
+  
+  // 设置超时
+  var timeoutId = setTimeout(function() {
+    console.error('JSONP超时');
+    cleanup();
+    // 降级到普通XHR
+    doSimpleXHR(requestUrl, urlUid, statusEl);
+  }, 5000);
+  
+  // 清理函数
+  function cleanup() {
+    clearTimeout(timeoutId);
+    if (script.parentNode) script.parentNode.removeChild(script);
+    try { delete window[callbackName]; } catch(e) { window[callbackName] = undefined; }
   }
+  
+  // 全局回调
+  window[callbackName] = function(data) {
+    console.log('JSONP回调成功');
+    cleanup();
+    handleCloudData(data, urlUid, statusEl);
+  };
+  
+  // 尝试JSONP（需要服务端支持）
+  var jsonpUrl = requestUrl + '&callback=' + callbackName;
+  script.src = jsonpUrl;
+  script.onerror = function() {
+    console.log('JSONP失败，使用XHR');
+    cleanup();
+    doSimpleXHR(requestUrl, urlUid, statusEl);
+  };
+  
+  document.head.appendChild(script);
 }
 
-// 使用XHR获取数据 - 带重试
-function tryFetchWithXHR(requestUrl, urlUid, statusEl, retryCount, MAX_RETRIES) {
-  console.log('XHR请求:', requestUrl, 'retry=', retryCount);
+// 简单的XHR实现
+function doSimpleXHR(url, urlUid, statusEl) {
+  console.log('XHR:', url);
   
   var xhr = new XMLHttpRequest();
-  var requestStartTime = Date.now();
-  var timeoutId;
-  
-  // 8秒超时（给手机更多时间）
-  timeoutId = setTimeout(function() {
-    console.error('XHR请求超时(8秒)');
+  var timeoutId = setTimeout(function() {
     xhr.abort();
-    
-    if (retryCount < MAX_RETRIES) {
-      console.log('自动重试...');
-      setTimeout(function() {
-        loadFromCloud(urlUid, retryCount + 1);
-      }, 1000);
-    } else {
-      statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>请求超时</strong><br><small>网络连接较慢，建议：<br>1. 切换到4G/5G网络<br>2. 检查WiFi信号<br>3. 稍后重试</small></div>';
-    }
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><strong>加载超时</strong><br>请检查网络后重试</div>';
   }, 8000);
   
   xhr.onreadystatechange = function() {
     if (xhr.readyState === 4) {
       clearTimeout(timeoutId);
-      var elapsed = Date.now() - requestStartTime;
-      console.log('XHR完成，耗时:', elapsed + 'ms, 状态:', xhr.status);
+      console.log('XHR状态:', xhr.status);
       
       if (xhr.status === 200) {
         try {
-          var json = JSON.parse(xhr.responseText);
-          handleCloudData(json, urlUid, statusEl);
+          var data = JSON.parse(xhr.responseText);
+          handleCloudData(data, urlUid, statusEl);
         } catch(e) {
-          console.error('JSON解析失败:', e);
-          statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>数据解析失败</strong><br><small>响应格式错误，请刷新重试</small></div>';
+          statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
         }
       } else if (xhr.status === 0) {
-        // 网络错误或CORS阻断 - 尝试重试
-        console.error('XHR状态为0，可能是CORS或网络问题');
-        if (retryCount < MAX_RETRIES) {
-          console.log('网络错误，自动重试...');
-          setTimeout(function() {
-            loadFromCloud(urlUid, retryCount + 1);
-          }, 1000);
-        } else {
-          statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>网络连接失败</strong><br><small>无法连接到云端服务器<br>建议切换到4G/5G网络后重试</small></div>';
-        }
-      } else if (xhr.status === 404) {
-        statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-upload-alt me-1"></i><strong>uid=' + urlUid + ' 云端暂无数据</strong><br><small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small></div>';
+        statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><strong>网络错误</strong><br>无法连接到服务器，请切换4G/5G网络</div>';
       } else {
-        // 其他错误 - 尝试重试
-        if (retryCount < MAX_RETRIES) {
-          console.log('服务器错误' + xhr.status + '，自动重试...');
-          setTimeout(function() {
-            loadFromCloud(urlUid, retryCount + 1);
-          }, 1000);
-        } else {
-          statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>加载失败 (' + xhr.status + ')</strong><br><small>服务器错误，请稍后重试</small></div>';
-        }
+        statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载失败 (' + xhr.status + ')</div>';
       }
     }
   };
   
-  xhr.onerror = function() {
-    clearTimeout(timeoutId);
-    console.error('XHR网络错误');
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>网络错误</strong><br><small>无法连接到服务器，请检查网络<br>或尝试切换WiFi/4G网络</small></div>';
-  };
-  
-  xhr.onabort = function() {
-    clearTimeout(timeoutId);
-    console.log('XHR请求被中止');
-  };
-  
-  try {
-    xhr.open('GET', requestUrl, true);
-    xhr.setRequestHeader('Accept', 'application/json');
-    xhr.send();
-    console.log('XHR请求已发送');
-  } catch(e) {
-    clearTimeout(timeoutId);
-    console.error('XHR发送失败:', e);
-    statusEl.innerHTML = '<div class="alert alert-danger py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>请求发送失败</strong><br><small>' + e.message + '</small></div>';
-  }
+  xhr.open('GET', url, true);
+  xhr.setRequestHeader('Accept', 'application/json');
+  xhr.send();
 }
 
 // 处理云端返回的数据
