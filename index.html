@@ -1383,21 +1383,26 @@ renderCollectPanel();
     var urlParams = new URLSearchParams(location.search);
     var urlUid = urlParams.get('uid');
     
+    // 获取当前用户ID
+    var currentUserId = localStorage.getItem(TENANT_KEY);
+    
     if (urlUid) {
-      // 手机端/跨设备访问：直接读取JSON文件
-      console.log('initPage: 检测到uid参数,开始加载');
+      // 手机端/跨设备访问：URL指定了用户ID
+      console.log('initPage: 检测到uid参数,加载用户数据:', urlUid);
       loadJsonData(urlUid);
+    } else if (currentUserId) {
+      // 电脑端：已有用户ID，优先读取该用户的云端数据
+      var shortId = currentUserId.replace('uid_', '');
+      console.log('initPage: 读取当前用户云端数据:', shortId);
+      loadJsonData(shortId);
     } else {
-      // 电脑端：检查是否已有用户ID
-      var existingId = localStorage.getItem(TENANT_KEY);
-      if (!existingId) {
-        // 新用户：生成短ID并显示分享链接
-        var shortId = generateShortId();
-        localStorage.setItem(TENANT_KEY, 'uid_' + shortId);
-        showNewUserWelcome(shortId);
-      }
-      // 从本地加载
-      loadFromLocal();
+      // 新用户：生成短ID并显示欢迎
+      var newShortId = generateShortId();
+      localStorage.setItem(TENANT_KEY, 'uid_' + newShortId);
+      showNewUserWelcome(newShortId);
+      // 显示空状态
+      document.getElementById('uploadStatus').innerHTML =
+        '<div class="alert alert-primary py-2 small">请上传Excel文件开始分析</div>';
     }
   } catch(e) {
     console.error('initPage错误:', e);
