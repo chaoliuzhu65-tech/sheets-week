@@ -1524,13 +1524,15 @@ function loadJsonData(urlUid) {
   var checkUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=' + checkCallback + '&_=' + Date.now();
   
   var script = document.createElement('script');
+  var isTimeout = false;
   var timeoutId = setTimeout(function() {
-    // JSONP 超时，说明无数据或网络问题
+    isTimeout = true;
+    // JSONP 超时，说明无数据
     if (script.parentNode) document.head.removeChild(script);
     try { delete window[checkCallback]; } catch(e) {}
     statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
     localStorage.setItem('delong_data_cleared', 'true');
-  }, 3000);
+  }, 5000);
   
   window[checkCallback] = function(data) {
     clearTimeout(timeoutId);
@@ -1552,8 +1554,10 @@ function loadJsonData(urlUid) {
     clearTimeout(timeoutId);
     if (script.parentNode) document.head.removeChild(script);
     try { delete window[checkCallback]; } catch(e) {}
-    // JSONP 错误，尝试直接读取 JSON 文件
-    loadJsonFile(urlUid, statusEl);
+    // JSONP 错误，如果还没超时，尝试读取 JSON 文件
+    if (!isTimeout) {
+      loadJsonFile(urlUid, statusEl);
+    }
   };
   
   script.src = checkUrl;
