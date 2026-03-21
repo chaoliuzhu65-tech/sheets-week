@@ -633,7 +633,10 @@ function getTenantId() {
   const urlParams = new URLSearchParams(location.search);
   const urlUserId = urlParams.get('uid');
   if (urlUserId && urlUserId.length >= 4) {
-    return 'uid_' + urlUserId;
+    const fullId = 'uid_' + urlUserId;
+    // 同步到 localStorage，确保一致性
+    localStorage.setItem(TENANT_KEY, fullId);
+    return fullId;
   }
   
   // 从localStorage读取用户设置的ID
@@ -662,7 +665,8 @@ function setUserId(userId) {
   // 清理并设置新的用户ID
   const cleanId = userId.trim().replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20);
   if (cleanId.length < 4) return false;
-  localStorage.setItem(TENANT_KEY, 'uid_' + cleanId);
+  const fullId = 'uid_' + cleanId;
+  localStorage.setItem(TENANT_KEY, fullId);
   return true;
 }
 
