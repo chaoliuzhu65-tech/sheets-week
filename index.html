@@ -1437,6 +1437,14 @@ renderCollectPanel();
     // 获取当前用户ID
     var currentUserId = localStorage.getItem(TENANT_KEY);
     
+    // 如果 URL 没有 uid，但 localStorage 有，可能是微信浏览器去掉了参数
+    // 尝试从 localStorage 恢复
+    if (!urlUid && currentUserId) {
+      var savedUid = currentUserId.replace('uid_', '');
+      console.log('initPage: 从localStorage恢复uid:', savedUid);
+      urlUid = savedUid;
+    }
+    
     if (urlUid) {
       // 手机端/跨设备访问：URL指定了用户ID
       console.log('initPage: 检测到uid参数,加载用户数据:', urlUid);
