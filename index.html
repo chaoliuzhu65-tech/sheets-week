@@ -1457,9 +1457,13 @@ renderCollectPanel();
       var newShortId = generateShortId();
       localStorage.setItem(TENANT_KEY, 'uid_' + newShortId);
       showNewUserWelcome(newShortId);
-      // 显示空状态
+      // 显示空状态 - 新用户需要先上传数据
       document.getElementById('uploadStatus').innerHTML =
-        '<div class="alert alert-primary py-2 small">请上传Excel文件开始分析</div>';
+        '<div class="alert alert-primary py-2 small">' +
+        '<strong>新用户欢迎！</strong><br>' +
+        '您的ID: <strong>' + newShortId + '</strong><br>' +
+        '请先上传Excel文件，手机端才能查看数据' +
+        '</div>';
     }
   } catch(e) {
     console.error('initPage错误:', e);
@@ -1605,7 +1609,11 @@ function loadJsonFile(urlUid, statusEl) {
         statusEl.innerHTML = '<div class="alert alert-info py-2 small">尝试从云端加载...</div>';
         loadFromCloudflare(urlUid, statusEl);
       } else {
-        statusEl.innerHTML = '<div class="alert alert-info py-2 small">暂无数据，请在电脑端上传Excel文件</div>';
+        statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
+          '<strong>暂无数据</strong><br>' +
+          '用户ID: ' + urlUid + '<br>' +
+          '请在电脑端上传Excel文件后，手机端才能查看' +
+          '</div>';
       }
     }
   };
