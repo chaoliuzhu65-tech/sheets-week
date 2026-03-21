@@ -1587,17 +1587,21 @@ function loadFromCloudflare(urlUid, statusEl) {
   window[callbackName] = function(data) {
     cleanup();
     console.log('Cloudflare返回:', data);
+    alert('调试: Cloudflare返回 success=' + (data && data.success) + ', hasAnalysis=' + !!(data && data.analysis));
     if (data && data.success && data.analysis) {
       // Cloudflare 返回的数据结构: {success, analysis: {file_info, data_summary, analysis: {groups}}}
       // 直接传递给 handleCloudData，它期望 {success, analysis} 结构
+      alert('调试: 调用handleCloudData');
       handleCloudData(data, urlUid, statusEl);
     } else if (data && data.success === false) {
+      alert('调试: Cloudflare返回success=false');
       statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
         '<strong>暂无数据</strong><br>' +
         '用户ID: ' + urlUid + '<br>' +
         '请在电脑端上传Excel文件' +
         '</div>';
     } else {
+      alert('调试: 数据格式错误');
       statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据加载失败</div>';
     }
   };
