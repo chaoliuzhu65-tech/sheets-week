@@ -834,6 +834,10 @@ async function saveResult(result) {
   result.tenant_id = tenantId;
   const jsonStr = JSON.stringify(result);
   
+  // 清除"数据已清空"标记（因为正在保存新数据）
+  localStorage.removeItem('delong_data_cleared');
+  localStorage.removeItem('delong_cleared_time');
+  
   // 1. localStorage
   try { 
     localStorage.setItem(STORAGE_KEY, jsonStr);
@@ -1505,6 +1509,14 @@ function showToast(msg) {
 // 直接读取JSON文件
 function loadJsonData(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
+  
+  // 检查数据是否已被清空
+  var isCleared = localStorage.getItem('delong_data_cleared');
+  if (isCleared === 'true') {
+    statusEl.innerHTML = '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
+    return;
+  }
+  
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
   var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
@@ -2143,7 +2155,7 @@ async function clearCloudData() {
     return;
   }
   
-  if (!confirm(`⚠️ 确定要清空数据吗？\n\n用户: ${tenant}\n此操作将清空本地和云端数据！`)) {
+  if (!confirm(`⚠️ 确定要清空数据吗？\n\n用户: ${tenant}\n此操作将清空所有数据！`)) {
     return;
   }
   
@@ -2165,16 +2177,20 @@ async function clearCloudData() {
       console.warn('Cloudflare清空失败:', e);
     }
     
-    // 2. 清空本地数据
+    // 2. 清空所有本地数据
     localStorage.removeItem('delong_cached_analysis');
     localStorage.removeItem('delong_cached_hash');
     localStorage.removeItem(STORAGE_KEY);
     
-    // 3. 清空本地显示
+    // 3. 标记数据已清空（防止从JSON文件恢复旧数据）
+    localStorage.setItem('delong_data_cleared', 'true');
+    localStorage.setItem('delong_cleared_time', Date.now().toString());
+    
+    // 4. 清空本地显示
     _lastResult = null;
     _groups = [];
     
-    showSyncStatus('✅ 数据已清空' + (cfCleared ? '(含云端)' : '(仅本地)'));
+    showSyncStatus('✅ 数据已清空');
     alert('数据已清空！页面将刷新...');
     
     // 刷新页面
