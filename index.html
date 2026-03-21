@@ -851,28 +851,40 @@ async function saveResult(result) {
   } catch(e) { console.warn('IndexedDB save failed:', e); }
   
   // 3. 后端API同步（Cloudflare Worker）- 按用户ID保存
+  // 确保先初始化配置
   initApiConfig();
-  if (_apiBaseUrl) {
-    try {
-      const shortId = tenantId.startsWith('uid_') ? tenantId.substring(4) : tenantId.substring(0, 8);
-      const resp = await fetch(_apiBaseUrl + '/api/sync?' + new URLSearchParams({
-        tenant: tenantId,
-        secret: ADMIN_SECRET
-      }), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: jsonStr
-      });
-      const respData = await resp.json().catch(() => ({}));
-      if (resp.ok && respData.success) {
-        showSyncStatus('☁️ 数据已同步到云端（用户ID: ' + shortId + '）');
-        console.log('✅ 云端同步成功 (用户:', shortId, ')');
-      } else {
-        console.warn('云端同步失败:', respData);
-      }
-    } catch(e) { 
-      console.warn('后端API同步失败:', e); 
+  const apiUrl = _apiBaseUrl || DEFAULT_API_URL;
+  console.log('准备同步到云端, API:', apiUrl, 'Tenant:', tenantId);
+  
+  try {
+    const shortId = tenantId.startsWith('uid_') ? tenantId.substring(4) : tenantId.substring(0, 8);
+    const syncUrl = apiUrl + '/api/sync?' + new URLSearchParams({
+      tenant: tenantId,
+      secret: ADMIN_SECRET
+    });
+    console.log('同步URL:', syncUrl);
+    
+    const resp = await fetch(syncUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: jsonStr
+    });
+    
+    if (!resp.ok) {
+      throw new Error('HTTP ' + resp.status);
     }
+    
+    const respData = await resp.json().catch(() => ({}));
+    if (respData.success) {
+      showSyncStatus('☁️ 数据已同步到云端（用户ID: ' + shortId + '）');
+      console.log('✅ 云端同步成功 (用户:', shortId, ')');
+    } else {
+      console.warn('⚠️ 云端返回失败:', respData);
+      showSyncStatus('⚠️ 云端同步返回: ' + (respData.error || '未知错误'));
+    }
+  } catch(e) { 
+    console.error('❌ 云端同步失败:', e); 
+    showSyncStatus('❌ 云端同步失败: ' + e.message);
   }
   // 3. Supabase 云同步
   if (_supabaseClient) {
@@ -997,14 +1009,15 @@ async function loadResult() {
   }
   
   // 3. 从云端加载（Cloudflare Worker）
+  const loadApiUrl = _apiBaseUrl || DEFAULT_API_URL;
+  console.log('从云端加载数据, tenant:', _tenantId, 'API:', loadApiUrl);
+  addLoadStep('请求云端(tenant=' + shortId + ')');
+  
   try {
-    console.log('从云端加载数据, tenant:', _tenantId);
-    addLoadStep('请求云端(tenant=' + shortId + ')');
-    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     
-    const resp = await fetch((_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?' + new URLSearchParams({
+    const resp = await fetch(loadApiUrl + '/api/last-analysis?' + new URLSearchParams({
       tenant: _tenantId
     }), { 
       signal: controller.signal,
@@ -1012,23 +1025,34 @@ async function loadResult() {
     });
     clearTimeout(timeoutId);
     
+    console.log('云端响应状态:', resp.status);
+    
     if (resp.ok) {
       const json = await resp.json();
-      if (json.success && json.analysis && json.analysis.analysis) {
-        console.log('☁️ 从云端加载成功, hotels:', json.analysis.analysis.hotel_count);
-        addLoadStep('云端数据✅');
-        // 缓存到本地
-        json.analysis.tenant_id = _tenantId;
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(json.analysis)); } catch(e) {}
-        _lastResult = json.analysis;
-        return json.analysis;
-      } else {
-        const errMsg = json.error || '云端无此用户数据';
-        addLoadStep('云端: ' + errMsg);
-        console.warn('云端无数据:', errMsg);
+      console.log('云端返回数据:', JSON.stringify(json).substring(0, 200));
+      
+      // 检查数据格式 - 兼容新旧格式
+      if (json.success) {
+        const analysisData = json.analysis;
+        if (analysisData) {
+          // 检查是否有嵌套的 analysis 对象
+          const data = analysisData.analysis ? analysisData : { analysis: analysisData };
+          
+          console.log('☁️ 从云端加载成功');
+          addLoadStep('云端数据✅');
+          // 缓存到本地
+          analysisData.tenant_id = _tenantId;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(analysisData)); } catch(e) {}
+          _lastResult = analysisData;
+          return analysisData;
+        }
       }
+      const errMsg = json.error || '云端无此用户数据';
+      addLoadStep('云端: ' + errMsg);
+      console.warn('云端无数据:', errMsg);
     } else {
       addLoadStep('云端HTTP ' + resp.status);
+      console.warn('云端请求失败:', resp.status);
     }
   } catch(e) { 
     const errName = e.name === 'AbortError' ? '超时' : e.message;
