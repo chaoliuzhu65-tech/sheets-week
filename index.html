@@ -309,69 +309,24 @@
 <div class="main-wrap">
   <!-- 上传面板 -->
   <div class="page-panel active" id="panel-upload">
-    <!-- 后端API配置 -->
-    <div class="card" id="apiConfigCard" style="margin-bottom:14px;">
-      <div class="card-header" style="background:linear-gradient(135deg,#e63946,#c1121f);color:#fff;cursor:pointer;" onclick="toggleApiConfig()">
-        <i class="fas fa-server me-2"></i>后端服务器同步 <small style="opacity:0.7">(推荐，点击展开)</small>
-      </div>
-      <div class="card-body" id="apiConfigBody">
-        <div id="apiConfigForm">
-          <div class="alert alert-info py-2 small mb-2">
-            <i class="fas fa-info-circle"></i> 
-            <strong>使用说明：</strong>配置后端服务地址后，上传Excel数据会自动同步到服务器，手机端打开同一地址即可查看数据。
-          </div>
-          <div class="mb-2">
-            <label class="form-label small text-muted">同步服务器地址</label>
-            <input type="text" class="form-control form-control-sm" id="apiUrlInput" placeholder="https://delong-report-sync.chaoliuzhu65.workers.dev" value="https://delong-report-sync.chaoliuzhu65.workers.dev">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small text-muted">管理密码 <span class="badge bg-secondary">仅上传时使用</span></label>
-            <input type="password" class="form-control form-control-sm" id="adminSecretInput" placeholder="请输入管理密码" value="1234">
-            <small class="text-muted">默认密码: 1234</small>
-          </div>
-          <div class="alert alert-success py-2 small mb-2">
-            <i class="fas fa-cloud"></i> 
-            <strong>Cloudflare Worker：</strong>已默认填入，数据同步到云端，支持跨设备访问和手机端同步。
-          </div>
-          <button class="btn btn-danger btn-sm w-100" onclick="saveApiConfig()">
-            <i class="fas fa-link me-1"></i>连接后端服务器
-          </button>
-        </div>
-        <div id="apiConfigStatus" style="display:none;">
-          <div class="alert alert-success py-2 small">
-            <i class="fas fa-check-circle me-1"></i>已连接后端服务器<br>
-            <small id="apiUrlDisplay"></small>
-          </div>
-          <button class="btn btn-outline-danger btn-sm w-100 mb-2" onclick="clearCloudData()">
-            <i class="fas fa-trash-alt me-1"></i>清空云端数据
-          </button>
-          <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearApiConfig()">
-            <i class="fas fa-unlink me-1"></i>断开连接
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 用户身份设置 - 跨设备共享数据 -->
+    <!-- 用户身份设置 - 跨设备共享数据（自动同步） -->
     <div class="card" id="userIdCard" style="margin-bottom:14px;">
       <div class="card-header" style="background:linear-gradient(135deg,#4361ee,#3a0ca3);color:#fff;">
-        <i class="fas fa-users me-2"></i>跨设备数据共享
+        <i class="fas fa-users me-2"></i>数据同步
       </div>
       <div class="card-body" id="userIdBody">
         <div id="userIdForm">
           <div class="alert alert-info py-2 small mb-2">
-            <i class="fas fa-info-circle"></i>
-            <strong>使用步骤：</strong><br>
-            ① 输入一个易记的名称（如 delonix）<br>
-            ② 点击"设置并同步" → 数据立即推送到云端<br>
-            ③ 复制下方链接 → 手机端打开即可查看数据
+            <i class="fas fa-cloud-upload-alt"></i>
+            <strong>自动同步已启用</strong><br>
+            上传 Excel 后数据自动同步到云端，支持跨设备访问
           </div>
           <div class="mb-2">
-            <label class="form-label small text-muted">设置用户ID（4-20位字母或数字）</label>
+            <label class="form-label small text-muted">设置用户ID（4-20位字母或数字，用于标识数据）</label>
             <div class="input-group">
               <input type="text" class="form-control form-control-sm" id="userIdInput" placeholder="如: delonix" maxlength="20">
               <button class="btn btn-primary btn-sm" onclick="saveUserId()">
-                <i class="fas fa-check me-1"></i>设置并同步
+                <i class="fas fa-check me-1"></i>确认
               </button>
             </div>
           </div>
@@ -379,10 +334,10 @@
         <div id="userIdStatus" style="display:none;">
           <div class="alert alert-success py-2 small mb-2">
             <i class="fas fa-check-circle me-1"></i>当前用户ID：<strong><span id="currentUserIdDisplay" class="text-primary"></span></strong>
-            <span id="cloudSyncBadge" class="ms-2 badge bg-secondary">同步中...</span>
+            <span id="cloudSyncBadge" class="ms-2 badge bg-success">✅ 已同步</span>
           </div>
           <div class="mb-2">
-            <label class="form-label small text-muted"><i class="fas fa-mobile-alt me-1"></i>手机端分享链接（直接打开即可查看数据）</label>
+            <label class="form-label small text-muted"><i class="fas fa-mobile-alt me-1"></i>手机端访问链接</label>
             <div class="input-group">
               <input type="text" class="form-control form-control-sm" id="shareLinkInput" readonly>
               <button class="btn btn-success btn-sm" onclick="copyShareLink()">
@@ -391,8 +346,8 @@
             </div>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-primary btn-sm flex-fill" onclick="resyncToCloud()">
-              <i class="fas fa-cloud-upload-alt me-1"></i>重新推送到云端
+            <button class="btn btn-outline-danger btn-sm flex-fill" onclick="clearCloudData()">
+              <i class="fas fa-trash-alt me-1"></i>清空云端数据
             </button>
             <button class="btn btn-outline-secondary btn-sm" onclick="changeUserId()">
               <i class="fas fa-edit me-1"></i>修改ID
@@ -402,7 +357,7 @@
       </div>
     </div>
 
-    <!-- 已隐藏：飞书多维表格配置 -->
+    <!-- 已隐藏：后端API配置 -->
     <div class="card" id="feishuConfigCard" style="margin-bottom:14px; display:none;">
       <div class="card-header" style="background:linear-gradient(135deg,#00d1b2,#00b89c);color:#fff;cursor:pointer;" onclick="toggleFeishuConfig()">
         <i class="fas fa-table me-2"></i>飞书多维表格 <small style="opacity:0.7">(点击展开)</small>
@@ -1544,14 +1499,14 @@ function addLoadStep(msg) {
     
     const urlUid = new URLSearchParams(location.search).get('uid');
     const tipHtml = urlUid
-      ? `<div class="alert alert-warning py-2 small mt-2">
-           <i class="fas fa-exclamation-triangle me-1"></i>
-           <strong>uid=${urlUid} 云端无数据</strong><br>
-           <small>请在<strong>电脑端</strong>打开此链接，上传 Excel 并设置相同的用户ID「${urlUid}」后点击"重新推送到云端"</small>
+      ? `<div class="alert alert-info py-2 small mt-2">
+           <i class="fas fa-cloud-upload-alt me-1"></i>
+           <strong>uid=${urlUid} 云端暂无数据</strong><br>
+           <small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small>
          </div>`
       : `<div class="alert alert-primary py-2 small mt-2">
-           <i class="fas fa-users me-1"></i>
-           <strong>跨设备访问：</strong>先设置用户ID → 上传Excel → 点击"重新推送到云端" → 复制链接到手机端
+           <i class="fas fa-upload me-1"></i>
+           <strong>欢迎使用！</strong>请上传 Excel 文件，数据将自动同步到云端。
          </div>`;
     
     document.getElementById('uploadStatus').innerHTML =
