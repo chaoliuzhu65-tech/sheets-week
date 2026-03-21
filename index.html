@@ -1437,19 +1437,29 @@ renderCollectPanel();
     var currentUserId = localStorage.getItem(TENANT_KEY);
     
     // 判断是否是手机端/跨设备访问（URL有uid参数）
+    // 手机端：只要有uid参数就从云端加载（手机端没有localStorage数据）
+    // 电脑端：uid与localStorage不同才从云端加载
     var isMobileAccess = false;
     if (urlUid) {
-      // URL有uid参数，检查是否与localStorage中的不同
+      // 检测是否是手机端（通过屏幕宽度或触摸支持）
+      var isMobileDevice = window.innerWidth < 768 || 'ontouchstart' in window;
       var currentUid = currentUserId ? currentUserId.replace('uid_', '') : null;
-      if (urlUid !== currentUid) {
+      
+      if (isMobileDevice) {
+        // 手机端：有uid参数就从云端加载
         isMobileAccess = true;
+        console.log('initPage: 检测到手机端，从云端加载');
+      } else if (urlUid !== currentUid) {
+        // 电脑端：不同用户才从云端加载
+        isMobileAccess = true;
+        console.log('initPage: 电脑端访问不同用户，从云端加载');
       }
     }
     
     if (isMobileAccess) {
-      // 手机端/跨设备访问：URL指定了不同的用户ID，从云端加载
-      console.log('initPage: 手机端访问，从云端加载:', urlUid);
-      alert('手机端调试: 正在从云端加载数据，用户ID=' + urlUid);
+      // 手机端/跨设备访问：从云端加载
+      console.log('initPage: 从云端加载:', urlUid);
+      alert('调试: 正在从云端加载数据，用户ID=' + urlUid);
       loadFromCloudflare(urlUid, document.getElementById('uploadStatus'));
     } else if (currentUserId) {
       // 电脑端：已有用户ID，优先读取本地数据
