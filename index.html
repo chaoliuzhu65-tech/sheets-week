@@ -1594,8 +1594,10 @@ function loadJsonFile(urlUid, statusEl) {
 
 // 从本地加载（电脑端）
 function loadFromLocal() {
+  console.log('loadFromLocal: 开始加载本地数据');
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    console.log('loadFromLocal: raw=', raw ? '有数据' : '无数据');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.analysis) {
