@@ -1547,6 +1547,14 @@ function loadJsonData(urlUid) {
 
 // 从本地加载（电脑端）
 function loadFromLocal() {
+  // 检查数据是否已被清空
+  var isCleared = localStorage.getItem('delong_data_cleared');
+  if (isCleared === 'true') {
+    document.getElementById('uploadStatus').innerHTML = 
+      '<div class="alert alert-info py-2 small">数据已清空，请上传新的Excel文件</div>';
+    return;
+  }
+  
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
