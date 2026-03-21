@@ -346,38 +346,35 @@
 
     <!-- 用户身份设置 - 跨设备共享数据 -->
     <div class="card" id="userIdCard" style="margin-bottom:14px;">
-      <div class="card-header" style="background:linear-gradient(135deg,#4361ee,#3a0ca3);color:#fff;cursor:pointer;" onclick="toggleUserIdCard()">
-        <i class="fas fa-users me-2"></i>跨设备数据共享 <small style="opacity:0.7">(设置用户ID，同一ID的设备共享数据)</small>
+      <div class="card-header" style="background:linear-gradient(135deg,#4361ee,#3a0ca3);color:#fff;">
+        <i class="fas fa-users me-2"></i>跨设备数据共享
       </div>
       <div class="card-body" id="userIdBody">
         <div id="userIdForm">
           <div class="alert alert-info py-2 small mb-2">
-            <i class="fas fa-info-circle"></i> 
-            <strong>使用说明：</strong><br>
-            1. 输入一个易记的用户名（如"德胧报表"、"张三"等）<br>
-            2. 点击"设置用户ID"后，复制生成的分享链接<br>
-            3. 手机端打开分享链接即可自动访问同一数据
+            <i class="fas fa-info-circle"></i>
+            <strong>使用步骤：</strong><br>
+            ① 输入一个易记的名称（如 delonix）<br>
+            ② 点击"设置并同步" → 数据立即推送到云端<br>
+            ③ 复制下方链接 → 手机端打开即可查看数据
           </div>
           <div class="mb-2">
             <label class="form-label small text-muted">设置用户ID（4-20位字母或数字）</label>
             <div class="input-group">
-              <input type="text" class="form-control form-control-sm" id="userIdInput" placeholder="如: delong2026" maxlength="20">
+              <input type="text" class="form-control form-control-sm" id="userIdInput" placeholder="如: delonix" maxlength="20">
               <button class="btn btn-primary btn-sm" onclick="saveUserId()">
-                <i class="fas fa-check me-1"></i>设置
+                <i class="fas fa-check me-1"></i>设置并同步
               </button>
             </div>
           </div>
-          <div id="userIdHelp" class="form-text small text-muted">
-            用户ID将作为数据归属标识，同一ID的所有设备共享数据
-          </div>
         </div>
         <div id="userIdStatus" style="display:none;">
-          <div class="alert alert-success py-2 small">
-            <i class="fas fa-check-circle me-1"></i>用户ID已设置<br>
-            <strong>当前ID: </strong><span id="currentUserIdDisplay" class="badge bg-primary"></span>
+          <div class="alert alert-success py-2 small mb-2">
+            <i class="fas fa-check-circle me-1"></i>当前用户ID：<strong><span id="currentUserIdDisplay" class="text-primary"></span></strong>
+            <span id="cloudSyncBadge" class="ms-2 badge bg-secondary">同步中...</span>
           </div>
           <div class="mb-2">
-            <label class="form-label small text-muted"><i class="fas fa-link me-1"></i>分享链接（手机端打开此链接即可访问数据）</label>
+            <label class="form-label small text-muted"><i class="fas fa-mobile-alt me-1"></i>手机端分享链接（直接打开即可查看数据）</label>
             <div class="input-group">
               <input type="text" class="form-control form-control-sm" id="shareLinkInput" readonly>
               <button class="btn btn-success btn-sm" onclick="copyShareLink()">
@@ -385,9 +382,14 @@
               </button>
             </div>
           </div>
-          <button class="btn btn-outline-danger btn-sm w-100 mt-2" onclick="resetUserId()">
-            <i class="fas fa-refresh me-1"></i>重置用户ID（会创建新的数据空间）
-          </button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm flex-fill" onclick="resyncToCloud()">
+              <i class="fas fa-cloud-upload-alt me-1"></i>重新推送到云端
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="changeUserId()">
+              <i class="fas fa-edit me-1"></i>修改ID
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -945,26 +947,29 @@ async function loadResult() {
   _tenantId = getTenantId();
   if (!_supabaseClient) initSupabase();
   
-  // 1. 先尝试 localStorage（本地优先）- 只加载自己的租户数据
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      // 检查是否是同一用户（支持新旧两种ID格式）
-      const savedTenant = parsed.tenant_id || '';
-      const isSameTenant = savedTenant === _tenantId || 
-        (savedTenant.startsWith('uid_') && _tenantId.startsWith('uid_') && savedTenant === _tenantId);
-      
-      if (parsed && parsed.analysis && isSameTenant) {
-        const shortId = _tenantId.startsWith('uid_') ? _tenantId.substring(4) : _tenantId.substring(0,8);
-        console.log('从 localStorage 加载数据 (用户:', shortId + ')');
-        _lastResult = parsed;
-        return parsed;
-      }
-    }
-  } catch(e) { console.warn('localStorage load failed:', e); }
+  const shortId = _tenantId.startsWith('uid_') ? _tenantId.substring(4) : _tenantId.substring(0,8);
+  console.log('加载数据, 用户ID:', shortId);
   
-  // 2. URL hash（支持链接分享）
+  // 1. URL参数中带了uid时，优先走云端加载（不用本地缓存，确保跨设备一致）
+  const urlParams = new URLSearchParams(location.search);
+  const urlUid = urlParams.get('uid');
+  
+  if (!urlUid) {
+    // 同设备：先尝试 localStorage（本地优先，快速恢复）
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.analysis) {
+          console.log('从 localStorage 加载数据');
+          _lastResult = parsed;
+          return parsed;
+        }
+      }
+    } catch(e) { console.warn('localStorage load failed:', e); }
+  }
+  
+  // 2. URL hash 分享数据（兼容旧链接）
   const hash = location.hash.slice(1);
   if (hash && hash.length > 10) {
     try {
@@ -978,37 +983,44 @@ async function loadResult() {
     } catch(e) { console.warn('URL hash load failed:', e); }
   }
   
-  // 3. 尝试后端API加载（Cloudflare Worker 云端）- 按租户加载
-  if (_apiBaseUrl) {
-    try {
-      console.log('尝试从云端加载 (租户:', _tenantId + ')');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      
-      const resp = await fetch(_apiBaseUrl + '/api/last-analysis?' + new URLSearchParams({
-        tenant: _tenantId
-      }), { 
-        signal: controller.signal,
-        headers: { 'Accept': 'application/json' }
-      });
-      clearTimeout(timeoutId);
-      
-      if (resp.ok) {
-        const json = await resp.json();
-        // json.analysis 就是完整分析结果
-        if (json.success && json.analysis && json.analysis.analysis) {
-          console.log('从云端加载数据成功, hotel_count:', json.analysis.analysis.hotel_count);
-          // 保存到本地，带上租户ID
-          json.analysis.tenant_id = _tenantId;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(json.analysis));
-          showSyncStatus('☁️ 已从云端加载数据');
-          _lastResult = json.analysis;
-          return json.analysis;
-        }
+  // 3. 从云端加载（Cloudflare Worker）
+  try {
+    console.log('从云端加载数据, tenant:', _tenantId);
+    addLoadStep('请求云端(tenant=' + shortId + ')');
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const resp = await fetch(DEFAULT_API_URL + '/api/last-analysis?' + new URLSearchParams({
+      tenant: _tenantId
+    }), { 
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json' }
+    });
+    clearTimeout(timeoutId);
+    
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json.success && json.analysis && json.analysis.analysis) {
+        console.log('☁️ 从云端加载成功, hotels:', json.analysis.analysis.hotel_count);
+        addLoadStep('云端数据✅');
+        // 缓存到本地
+        json.analysis.tenant_id = _tenantId;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(json.analysis)); } catch(e) {}
+        _lastResult = json.analysis;
+        return json.analysis;
+      } else {
+        const errMsg = json.error || '云端无此用户数据';
+        addLoadStep('云端: ' + errMsg);
+        console.warn('云端无数据:', errMsg);
       }
-    } catch(e) { 
-      console.warn('云端加载失败:', e.name);
+    } else {
+      addLoadStep('云端HTTP ' + resp.status);
     }
+  } catch(e) { 
+    const errName = e.name === 'AbortError' ? '超时' : e.message;
+    addLoadStep('云端失败:' + errName);
+    console.warn('云端加载失败:', e.name);
   }
   
   console.log('所有数据源都没有数据');
@@ -1481,39 +1493,35 @@ function addLoadStep(msg) {
     renderAll(cached);
     const fname = (cached.file_info || {}).filename || '历史数据';
     const atime = (cached.file_info || {}).analysis_time ? new Date(cached.file_info.analysis_time).toLocaleString('zh-CN') : '';
-    const fromHash = location.hash.length > 10 ? ' <span class="data-badge">链接分享</span>' : '';
+    const urlUid = new URLSearchParams(location.search).get('uid');
+    const sourceLabel = urlUid ? '☁️ 云端同步（' + urlUid + '）' : '💾 本地缓存';
     document.getElementById('uploadStatus').innerHTML =
       `<div class="alert alert-success py-2 small">
         <i class="fas fa-check-circle me-1"></i>
-        <strong>已加载数据：${fname}</strong>${atime ? ' ('+atime+')' : ''}${fromHash}
-        <br><span style="font-size:11px;color:#666;">数据来源：☁️ 云端同步</span>
+        <strong>数据已加载：${fname}</strong>${atime ? ' ('+atime+')' : ''}
+        <br><span style="font-size:11px;color:#666;">来源：${sourceLabel}</span>
       </div>`;
   } else {
-    // 显示加载步骤帮助调试
     const stepsHtml = _loadSteps.length > 0 ? 
-      '<br><span style="font-size:10px;color:#888;">步骤: ' + _loadSteps.join(' → ') + '</span>' : '';
+      '<br><span style="font-size:10px;color:#888;">诊断: ' + _loadSteps.join(' → ') + '</span>' : '';
     
-    const userIdTip = getTenantId().startsWith('uid_') ? '' : 
-      '<div class="alert alert-primary py-2 small mt-2">' +
-      '<i class="fas fa-users me-1"></i><strong>跨设备访问：</strong>' +
-      '先点击上方"跨设备数据共享"设置用户ID，再复制分享链接到手机端打开' +
-      '</div>';
+    const urlUid = new URLSearchParams(location.search).get('uid');
+    const tipHtml = urlUid
+      ? `<div class="alert alert-warning py-2 small mt-2">
+           <i class="fas fa-exclamation-triangle me-1"></i>
+           <strong>uid=${urlUid} 云端无数据</strong><br>
+           <small>请在<strong>电脑端</strong>打开此链接，上传 Excel 并设置相同的用户ID「${urlUid}」后点击"重新推送到云端"</small>
+         </div>`
+      : `<div class="alert alert-primary py-2 small mt-2">
+           <i class="fas fa-users me-1"></i>
+           <strong>跨设备访问：</strong>先设置用户ID → 上传Excel → 点击"重新推送到云端" → 复制链接到手机端
+         </div>`;
     
     document.getElementById('uploadStatus').innerHTML =
       `<div class="alert alert-warning py-2 small">
         <i class="fas fa-exclamation-triangle me-1"></i>
-        <strong>加载失败</strong>
-        ${stepsHtml}
-        <hr style="margin:8px 0;">
-        <i class="fas fa-lightbulb me-1"></i><strong>解决方法：</strong><br>
-        <span style="font-size:11px;">
-        1. 在电脑端上传 Excel 文件并确认同步成功<br>
-        2. 点击上方"跨设备数据共享"设置用户ID<br>
-        3. 复制生成的分享链接，在手机端打开<br>
-        4. 检查网络连接后刷新重试
-        </span>
-        ${userIdTip}
-      </div>`;
+        <strong>暂无数据</strong>${stepsHtml}
+      </div>${tipHtml}`;
   }
 })();
 
@@ -1998,7 +2006,6 @@ function saveUserId() {
     showToast('用户ID至少需要4个字符', true);
     return;
   }
-  
   if (!/^[a-zA-Z0-9_-]+$/.test(userId)) {
     showToast('用户ID只能包含字母、数字、下划线和连字符', true);
     return;
@@ -2006,39 +2013,89 @@ function saveUserId() {
   
   if (setUserId(userId)) {
     updateUserIdUI();
-    showToast('用户ID已设置为: ' + userId);
-    // 重新加载数据
-    loadResult().then(data => {
-      if (data && data.analysis) {
-        renderAll(data);
-      }
-    });
+    showToast('✅ 用户ID已设置: ' + userId);
+    // 设置ID后立即把本地数据推送到云端
+    resyncToCloud();
   } else {
-    showToast('设置失败，请重试', true);
+    showToast('设置失败，请检查格式', true);
+  }
+}
+
+// 把本地数据重新推送到云端（使用当前用户ID）
+async function resyncToCloud() {
+  const badge = document.getElementById('cloudSyncBadge');
+  if (badge) { badge.className = 'ms-2 badge bg-warning'; badge.textContent = '同步中...'; }
+  
+  // 先尝试从内存缓存取
+  let data = _lastResult;
+  
+  // 再从localStorage取
+  if (!data) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) data = JSON.parse(raw);
+    } catch(e) {}
+  }
+  
+  if (!data || !data.analysis) {
+    if (badge) { badge.className = 'ms-2 badge bg-secondary'; badge.textContent = '无本地数据'; }
+    showToast('没有本地数据，请先上传 Excel 文件', true);
+    return;
+  }
+  
+  const tenantId = getTenantId();
+  const shortId = tenantId.startsWith('uid_') ? tenantId.substring(4) : tenantId;
+  
+  // 更新租户ID
+  data.tenant_id = tenantId;
+  const jsonStr = JSON.stringify(data);
+  
+  // 更新 localStorage
+  try { localStorage.setItem(STORAGE_KEY, jsonStr); } catch(e) {}
+  
+  // 推送到云端
+  try {
+    const resp = await fetch(DEFAULT_API_URL + '/api/sync?' + new URLSearchParams({ tenant: tenantId }), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: jsonStr
+    });
+    const respData = await resp.json().catch(() => ({}));
+    if (resp.ok && respData.success) {
+      if (badge) { badge.className = 'ms-2 badge bg-success'; badge.textContent = '✅ 已同步'; }
+      showToast('☁️ 数据已同步到云端 (ID: ' + shortId + ')');
+      console.log('✅ 重新同步成功, tenant:', tenantId);
+    } else {
+      if (badge) { badge.className = 'ms-2 badge bg-danger'; badge.textContent = '同步失败'; }
+      showToast('同步失败: ' + (respData.error || '未知错误'), true);
+    }
+  } catch(e) {
+    if (badge) { badge.className = 'ms-2 badge bg-danger'; badge.textContent = '网络错误'; }
+    showToast('网络错误，无法同步: ' + e.message, true);
   }
 }
 
 function copyShareLink() {
   const link = document.getElementById('shareLinkInput').value;
   navigator.clipboard.writeText(link).then(() => {
-    showToast('分享链接已复制到剪贴板');
+    showToast('📋 分享链接已复制，发给手机端打开即可');
   }).catch(() => {
-    // 降级方案
     const input = document.getElementById('shareLinkInput');
     input.select();
-    document.execCommand('copy');
-    showToast('分享链接已复制');
+    try { document.execCommand('copy'); } catch(e) {}
+    showToast('📋 分享链接已复制');
   });
 }
 
-function resetUserId() {
-  if (!confirm('确定要重置用户ID吗？\n\n注意：重置后会创建新的数据空间，原有数据将无法访问。')) {
-    return;
-  }
+function changeUserId() {
+  if (!confirm('修改用户ID后，请重新设置并同步数据。\n确定继续吗？')) return;
   clearUserId();
   document.getElementById('userIdInput').value = '';
   updateUserIdUI();
-  showToast('用户ID已重置，请重新设置');
+}
+
+function resetUserId() {
+  changeUserId();
 }
 
 function showToast(msg, isError = false) {
@@ -2048,10 +2105,10 @@ function showToast(msg, isError = false) {
   toast.id = 'toastMsg';
   toast.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;background:' + 
     (isError ? '#fce4ec' : '#e8f5e9') + ';color:' + (isError ? '#c62828' : '#2e7d32') + 
-    ';border-radius:20px;font-size:13px;font-weight:600;box-shadow:0 2px12px rgba(0,0,0,0.15);transition:opacity 0.3s';
+    ';border-radius:20px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.2);max-width:90vw;text-align:center;transition:opacity 0.3s';
   toast.textContent = msg;
   document.body.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
 // 页面加载时初始化用户ID UI
