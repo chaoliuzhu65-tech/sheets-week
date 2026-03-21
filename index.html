@@ -695,13 +695,16 @@ function getShareableLink() {
 // 后端 API 配置（支持多租户）
 // ═══════════════════════════════════════════════════════════════
 const API_CONFIG_KEY = 'delong_api_config';
-// 腾讯云同步服务（已弃用）
-const TENCENT_API_URL = 'http://43.128.106.187';
 // ⚠️ 请修改为你的密码！不要分享给他人！
 let ADMIN_SECRET = '1234';
-// Cloudflare Worker（主用 - 全球访问稳定）
+// Cloudflare Worker（主用）
 const CF_API_URL = 'https://delong-report-sync.chaoliuzhu65.workers.dev';
-// 默认使用 Cloudflare Worker
+// 备用API列表（国内访问优化）
+const BACKUP_API_URLS = [
+  'https://delong-report-sync.chaoliuzhu65.workers.dev',
+  'https://api.allorigins.win/raw?url=https://delong-report-sync.chaoliuzhu65.workers.dev'
+];
+// 默认使用Cloudflare
 const DEFAULT_API_URL = CF_API_URL;
 let _apiBaseUrl = DEFAULT_API_URL;
 let _tenantId = '';
