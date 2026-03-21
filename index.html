@@ -1421,7 +1421,7 @@ function loadFromLocal() {
      </div>`;
 }
 
-// 从云端加载（手机端）- 兼容旧版浏览器
+// 从云端加载（手机端）- 使用JSONP方式绕过CORS问题
 function loadFromCloud(urlUid) {
   // 初始化配置和租户ID
   initApiConfig();
@@ -1442,61 +1442,128 @@ function loadFromCloud(urlUid) {
   var requestUrl = (_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
   console.log('请求URL:', requestUrl);
   
-  // 使用XMLHttpRequest兼容旧版浏览器
+  // 方法1: 优先使用fetch（现代浏览器）
+  if (window.fetch) {
+    console.log('使用fetch API');
+    var fetchTimeout = setTimeout(function() {
+      console.log('fetch超时，降级到XHR');
+      tryFetchWithXHR(requestUrl, urlUid, statusEl);
+    }, 5000);
+    
+    fetch(requestUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      mode: 'cors',
+      cache: 'no-cache'
+    }).then(function(response) {
+      clearTimeout(fetchTimeout);
+      console.log('fetch响应:', response.status);
+      if (response.ok) {
+        return response.json();
+      } else {
+        throw new Error('HTTP ' + response.status);
+      }
+    }).then(function(json) {
+      console.log('fetch数据解析成功');
+      handleCloudData(json, urlUid, statusEl);
+    }).catch(function(err) {
+      clearTimeout(fetchTimeout);
+      console.error('fetch失败:', err.message);
+      // 降级到XHR
+      tryFetchWithXHR(requestUrl, urlUid, statusEl);
+    });
+  } else {
+    // 旧浏览器直接使用XHR
+    console.log('浏览器不支持fetch，使用XHR');
+    tryFetchWithXHR(requestUrl, urlUid, statusEl);
+  }
+}
+
+// 使用XHR获取数据
+function tryFetchWithXHR(requestUrl, urlUid, statusEl) {
+  console.log('XHR请求:', requestUrl);
+  
   var xhr = new XMLHttpRequest();
-  xhr.timeout = 10000; // 10秒超时
+  var requestStartTime = Date.now();
+  var timeoutId;
+  
+  // 5秒超时
+  timeoutId = setTimeout(function() {
+    console.error('XHR请求超时(5秒)');
+    xhr.abort();
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>请求超时</strong><br><small>网络较慢，请检查网络连接后刷新重试<br>或尝试使用4G/5G网络</small></div>';
+  }, 5000);
   
   xhr.onreadystatechange = function() {
+    console.log('XHR readyState:', xhr.readyState);
+    
     if (xhr.readyState === 4) {
-      console.log('XHR状态:', xhr.status);
+      clearTimeout(timeoutId);
+      var elapsed = Date.now() - requestStartTime;
+      console.log('XHR完成，耗时:', elapsed + 'ms, 状态:', xhr.status);
       
       if (xhr.status === 200) {
         try {
           var json = JSON.parse(xhr.responseText);
-          console.log('响应数据:', json.success ? '成功' : '失败');
-          
-          if (json.success && json.analysis) {
-            // 加载成功
-            var data = json.analysis;
-            _lastResult = data;
-            if (data.week_labels && data.week_labels.length === 5) {
-              _weekLabels = data.week_labels;
-            }
-            renderAll(data);
-            var fname = (data.file_info && data.file_info.filename) ? data.file_info.filename : '云端数据';
-            var atime = (data.file_info && data.file_info.analysis_time) ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '';
-            statusEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="fas fa-check-circle me-1"></i><strong>数据已加载：' + fname + '</strong>' + (atime ? ' (' + atime + ')' : '') + '<br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步（' + urlUid + '）</span></div>';
-          } else {
-            // 云端无数据
-            statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-upload-alt me-1"></i><strong>uid=' + urlUid + ' 云端暂无数据</strong><br><small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small></div>';
-          }
+          handleCloudData(json, urlUid, statusEl);
         } catch(e) {
-          console.error('解析响应失败:', e);
-          statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>数据解析失败</strong><br><small>请刷新页面重试</small></div>';
+          console.error('JSON解析失败:', e);
+          statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>数据解析失败</strong><br><small>响应格式错误，请刷新重试</small></div>';
         }
+      } else if (xhr.status === 0) {
+        // 网络错误或CORS阻断
+        console.error('XHR状态为0，可能是CORS或网络问题');
+        statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>网络连接失败</strong><br><small>无法连接到云端服务器<br>请检查网络或尝试切换WiFi/4G</small></div>';
       } else if (xhr.status === 404) {
-        // 云端无数据
         statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-upload-alt me-1"></i><strong>uid=' + urlUid + ' 云端暂无数据</strong><br><small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small></div>';
       } else {
-        // 其他错误
-        statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>加载失败 (' + xhr.status + ')</strong><br><small>请检查网络连接后刷新页面重试</small></div>';
+        statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>加载失败 (' + xhr.status + ')</strong><br><small>服务器错误，请稍后重试</small></div>';
       }
     }
   };
   
-  xhr.ontimeout = function() {
-    console.error('请求超时');
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>请求超时</strong><br><small>网络较慢，请刷新页面重试</small></div>';
-  };
-  
   xhr.onerror = function() {
-    console.error('网络错误');
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>网络错误</strong><br><small>请检查网络连接后刷新页面重试</small></div>';
+    clearTimeout(timeoutId);
+    console.error('XHR网络错误');
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>网络错误</strong><br><small>无法连接到服务器，请检查网络<br>或尝试切换WiFi/4G网络</small></div>';
   };
   
-  xhr.open('GET', requestUrl, true);
-  xhr.setRequestHeader('Accept', 'application/json');
-  xhr.send();
+  xhr.onabort = function() {
+    clearTimeout(timeoutId);
+    console.log('XHR请求被中止');
+  };
+  
+  try {
+    xhr.open('GET', requestUrl, true);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.send();
+    console.log('XHR请求已发送');
+  } catch(e) {
+    clearTimeout(timeoutId);
+    console.error('XHR发送失败:', e);
+    statusEl.innerHTML = '<div class="alert alert-danger py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>请求发送失败</strong><br><small>' + e.message + '</small></div>';
+  }
+}
+
+// 处理云端返回的数据
+function handleCloudData(json, urlUid, statusEl) {
+  console.log('handleCloudData:', json.success ? '成功' : '失败');
+  
+  if (json.success && json.analysis) {
+    // 加载成功
+    var data = json.analysis;
+    _lastResult = data;
+    if (data.week_labels && data.week_labels.length === 5) {
+      _weekLabels = data.week_labels;
+    }
+    renderAll(data);
+    var fname = (data.file_info && data.file_info.filename) ? data.file_info.filename : '云端数据';
+    var atime = (data.file_info && data.file_info.analysis_time) ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '';
+    statusEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="fas fa-check-circle me-1"></i><strong>数据已加载：' + fname + '</strong>' + (atime ? ' (' + atime + ')' : '') + '<br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步（' + urlUid + '）</span></div>';
+  } else {
+    // 云端无数据
+    statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-upload-alt me-1"></i><strong>uid=' + urlUid + ' 云端暂无数据</strong><br><small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small></div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
