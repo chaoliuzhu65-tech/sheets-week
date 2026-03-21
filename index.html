@@ -635,6 +635,8 @@ let _detailCharts = {};
 let _lastResult = null; // 缓存完整分析结果
 let _weekLabels = ['最新周', '第2周', '第3周', '第4周', '第5周']; // 从Excel表头动态解析
 const WEEK_LABELS_FALLBACK = ['最新周', '第2周', '第3周', '第4周', '第5周'];
+// 注意：STORAGE_KEY 是固定的，但 localStorage 数据是按浏览器隔离的
+// 跨设备共享通过 JSON 文件和 Cloudflare 实现
 const STORAGE_KEY = 'delong_analysis_result';
 
 // ═══════════════════════════════════════════════════════════════
