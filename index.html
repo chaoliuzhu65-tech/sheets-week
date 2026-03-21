@@ -1417,12 +1417,13 @@ renderCollectPanel();
       console.log('initPage: 检测到uid参数,加载用户数据:', urlUid);
       loadJsonData(urlUid);
     } else if (currentUserId) {
-      // 电脑端：已有用户ID，优先读取该用户的云端数据
+      // 电脑端：已有用户ID，优先读取本地数据（更快更可靠）
       var shortId = currentUserId.replace('uid_', '');
-      console.log('initPage: 读取当前用户云端数据:', shortId);
+      console.log('initPage: 电脑端读取本地数据:', shortId);
       // 显示手机访问卡片
       showMobileAccessCard(shortId);
-      loadJsonData(shortId);
+      // 先尝试本地加载，如果没有再尝试云端
+      loadFromLocal();
     } else {
       // 新用户：生成短ID并显示欢迎
       var newShortId = generateShortId();
@@ -2064,10 +2065,33 @@ function initGroupChart(g, idx) {
   const colors = ranking.map(h => (h.mom||0) >= 0 ? '#2ec4b6' : '#e63946');
   const chart = echarts.init(dom);
   charts['c'+idx] = chart;
+  // 处理酒店名称：截断或换行
+  const shortNames = names.map(n => {
+    if (n.length <= 6) return n;
+    return n.substring(0, 6) + '...';
+  });
+  
   chart.setOption({
-    tooltip: { trigger:'axis', formatter: p => `${p[0].name}<br/>${g.name}：${fmtVal(p[0].value, g.name)}` },
-    grid: { top:16, bottom:72, left:6, right:6, containLabel:true },
-    xAxis: { type:'category', data:names, axisLabel:{ rotate:45, fontSize:10, interval:0 } },
+    tooltip: { trigger:'axis', formatter: p => `${names[p[0].dataIndex]}<br/>${g.name}：${fmtVal(p[0].value, g.name)}` },
+    grid: { top:24, bottom:60, left:6, right:6, containLabel:true },
+    xAxis: { 
+      type:'category', 
+      data:shortNames, 
+      axisLabel:{ 
+        rotate:0, 
+        fontSize:9, 
+        interval:0,
+        formatter: function(value) {
+          // 每4个字换行
+          if (value.length <= 4) return value;
+          var result = '';
+          for (var i = 0; i < value.length; i += 4) {
+            result += value.substring(i, i + 4) + '\n';
+          }
+          return result;
+        }
+      } 
+    },
     yAxis: { type:'value', axisLabel:{ fontSize:10 } },
     series: [{
       type:'bar', data:values,
