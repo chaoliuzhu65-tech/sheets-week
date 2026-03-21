@@ -1377,10 +1377,8 @@ renderCollectPanel();
       // 手机端/跨设备访问：从云端加载
       console.log('initPage: 检测到uid参数,开始云端加载');
       // 使用setTimeout确保DOM已就绪
-      setTimeout(function() {
-        // 使用诊断模式
-        diagnoseNetwork(urlUid);
-      }, 100);
+      // 直接读取JSON文件
+      loadJsonData(urlUid);
     } else {
       // 电脑端：从本地加载（不显示加载状态）
       loadFromLocal();
@@ -1392,107 +1390,37 @@ renderCollectPanel();
   }
 })();
 
-// 测试网络连通性
-function testNetworkAndLoad(urlUid) {
-  var statusEl = document.getElementById('uploadStatus');
-  statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在检测网络...</div>';
-  
-  // 方法1: 直接加载数据
-  console.log('直接开始加载数据');
-  loadFromCloud(urlUid);
-}
 
-// 网络诊断函数 - 同步立即显示结果
-function diagnoseNetwork(urlUid) {
-  var statusEl = document.getElementById('uploadStatus');
-  
-  // 立即显示所有基础信息
-  var info = [];
-  info.push('浏览器: ' + navigator.userAgent.substring(0, 30));
-  info.push('fetch: ' + (window.fetch ? '支持' : '不支持'));
-  info.push('XHR: ' + (window.XMLHttpRequest ? '支持' : '不支持'));
-  info.push('在线: ' + (navigator.onLine ? '是' : '否'));
-  
-  statusEl.innerHTML = '<div class="alert alert-info py-2 small">' + info.join('<br>') + '<br>正在测试API...</div>';
-  
-  // 立即尝试最简单的加载
-  setTimeout(function() {
-    simpleLoad(urlUid);
-  }, 500);
-}
 
-// 最简单的加载方式 - 直接读取同域JSON文件
-function simpleLoad(urlUid) {
+// 直接读取JSON文件
+function loadJsonData(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
-  // 方案1: 直接读取同域JSON文件（无跨域问题）
   var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
-  statusEl.innerHTML += '<br>读取本地数据...';
   
   var xhr = new XMLHttpRequest();
-  var timeoutId = setTimeout(function() {
-    xhr.abort();
-    statusEl.innerHTML += '无本地数据';
-    // 尝试云端
-    tryCloudflare(urlUid);
-  }, 3000);
-  
   xhr.onreadystatechange = function() {
     if (xhr.readyState === 4) {
-      clearTimeout(timeoutId);
       if (xhr.status === 200) {
         try {
           var data = JSON.parse(xhr.responseText);
-          statusEl.innerHTML += '成功!';
           handleCloudData(data, urlUid, statusEl);
         } catch(e) {
-          statusEl.innerHTML += '解析失败';
-          tryCloudflare(urlUid);
+          statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
         }
       } else {
-        statusEl.innerHTML += '无数据';
-        tryCloudflare(urlUid);
+        statusEl.innerHTML = '<div class="alert alert-info py-2 small">暂无数据，请在电脑端上传Excel文件</div>';
       }
     }
   };
   
   xhr.onerror = function() {
-    clearTimeout(timeoutId);
-    statusEl.innerHTML += '读取失败';
-    tryCloudflare(urlUid);
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载失败，请刷新重试</div>';
   };
   
   xhr.open('GET', jsonUrl, true);
   xhr.send();
-}
-
-// 备用: 尝试Cloudflare
-function tryCloudflare(urlUid) {
-  var statusEl = document.getElementById('uploadStatus');
-  statusEl.innerHTML += '<br>尝试云端...';
-  
-  var requestUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=cloudCallback&_=' + Date.now();
-  
-  var script = document.createElement('script');
-  var timeoutId = setTimeout(function() {
-    if (script.parentNode) document.head.removeChild(script);
-    statusEl.innerHTML += '超时<br><strong>建议: 电脑端先上传数据</strong>';
-  }, 5000);
-  
-  window.cloudCallback = function(data) {
-    clearTimeout(timeoutId);
-    if (script.parentNode) document.head.removeChild(script);
-    statusEl.innerHTML += '成功!';
-    handleCloudData(data, urlUid, statusEl);
-  };
-  
-  script.src = requestUrl;
-  script.onerror = function() {
-    clearTimeout(timeoutId);
-    statusEl.innerHTML += '失败<br><strong>建议: 电脑端先上传数据</strong>';
-  };
-  
-  document.head.appendChild(script);
 }
 
 // 从本地加载（电脑端）
