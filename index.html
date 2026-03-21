@@ -1550,43 +1550,6 @@ function loadJsonData(urlUid) {
   loadJsonFile(urlUid, statusEl);
 }
 
-// 使用 JSONP 从 Cloudflare 加载数据（备用方案）
-function loadFromCloudflare(urlUid, statusEl) {
-  var callbackName = 'cfCallback_' + Math.random().toString(36).substr(2, 9);
-  var url = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=' + callbackName;
-  
-  var script = document.createElement('script');
-  var timeout = setTimeout(function() {
-    cleanup();
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载超时，请刷新重试</div>';
-  }, 5000);
-  
-  function cleanup() {
-    clearTimeout(timeout);
-    if (script.parentNode) document.head.removeChild(script);
-    try { delete window[callbackName]; } catch(e) {}
-  }
-  
-  window[callbackName] = function(data) {
-    cleanup();
-    if (data && data.success && data.analysis) {
-      handleCloudData(data.analysis, urlUid, statusEl);
-    } else if (data && data.success === false) {
-      statusEl.innerHTML = '<div class="alert alert-info py-2 small">暂无数据，请在电脑端上传Excel文件</div>';
-    } else {
-      statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据格式错误</div>';
-    }
-  };
-  
-  script.onerror = function() {
-    cleanup();
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载失败，请刷新重试</div>';
-  };
-  
-  script.src = url;
-  document.head.appendChild(script);
-}
-
 // 读取 JSON 文件
 function loadJsonFile(urlUid, statusEl) {
   var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
@@ -1605,9 +1568,12 @@ function loadJsonFile(urlUid, statusEl) {
           statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
         }
       } else if (xhr.status === 404) {
-        // JSON 文件不存在，尝试从 Cloudflare 加载
-        statusEl.innerHTML = '<div class="alert alert-info py-2 small">尝试从云端加载...</div>';
-        loadFromCloudflare(urlUid, statusEl);
+        // JSON 文件不存在
+        statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
+          '<strong>暂无数据</strong><br>' +
+          '用户ID: ' + urlUid + '<br>' +
+          '请在电脑端上传Excel文件后，手机端才能查看' +
+          '</div>';
       } else {
         statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
           '<strong>暂无数据</strong><br>' +
