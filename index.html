@@ -928,72 +928,7 @@ async function saveResult(result) {
   }, 500);
 }
 
-async function loadResult() {
-  // 0. 初始化配置
-  initApiConfig();
-  _tenantId = getTenantId();
-  
-  const shortId = _tenantId.startsWith('uid_') ? _tenantId.substring(4) : _tenantId.substring(0,8);
-  console.log('加载数据, tenantId:', _tenantId, 'shortId:', shortId);
-  
-  // 1. URL参数中带了uid时，直接走云端加载
-  const urlParams = new URLSearchParams(location.search);
-  const urlUid = urlParams.get('uid');
-  
-  if (!urlUid) {
-    // 同设备：先尝试 localStorage
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.analysis) {
-          console.log('从 localStorage 加载数据');
-          _lastResult = parsed;
-          return parsed;
-        }
-      }
-    } catch(e) { console.warn('localStorage load failed:', e); }
-  }
-  
-  // 2. 从云端加载（简化版，无重试）
-  const loadApiUrl = _apiBaseUrl || DEFAULT_API_URL;
-  const requestUrl = loadApiUrl + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
-  console.log('请求云端:', requestUrl);
-  addLoadStep('请求云端...');
-  
-  try {
-    const resp = await fetch(requestUrl, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    });
-    
-    console.log('云端响应:', resp.status, resp.ok);
-    
-    if (resp.ok) {
-      const json = await resp.json();
-      console.log('云端数据:', json.success, json.analysis ? '有' : '无');
-      
-      if (json.success && json.analysis) {
-        console.log('✅ 云端加载成功');
-        addLoadStep('云端数据✅');
-        json.analysis.tenant_id = _tenantId;
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(json.analysis)); } catch(e) {}
-        _lastResult = json.analysis;
-        return json.analysis;
-      }
-      addLoadStep('云端: ' + (json.error || '无数据'));
-    } else {
-      addLoadStep('云端HTTP错误:' + resp.status);
-    }
-  } catch(e) { 
-    console.error('云端加载失败:', e);
-    addLoadStep('云端失败:' + e.message);
-  }
-  
-  return null;
-}
-
-// 增强版数据检查函数 - 同时检查所有存储
+// 数据检查函数 - 同时检查所有存储
 function checkAllStorage() {
   const results = [];
   
@@ -1428,68 +1363,110 @@ renderCollectPanel();
 // ═══════════════════════════════════════════════════════════════
 // 页面加载时恢复上次数据
 // ═══════════════════════════════════════════════════════════════
-let _loadSteps = [];
 
-function addLoadStep(msg) {
-  _loadSteps.push(msg);
-  console.log('[加载步骤]', msg);
-}
-
-(async function restoreLastData() {
-  _loadSteps = [];
+// 页面加载完成后执行数据恢复
+(function initPage() {
+  const urlParams = new URLSearchParams(location.search);
+  const urlUid = urlParams.get('uid');
   
-  // 显示正在加载状态
-  document.getElementById('uploadStatus').innerHTML =
-    `<div class="alert alert-info py-2 small" id="loadingStatus">
-      <i class="fas fa-sync-alt fa-spin me-1"></i>正在加载数据...
-      <br><span style="font-size:10px;color:#888;" id="loadSteps"></span>
-    </div>`;
-  
-  addLoadStep('开始加载');
-  addLoadStep('用户ID: ' + getShortUserId());
-  addLoadStep('API地址: ' + _apiBaseUrl);
-  
-  const cached = await loadResult();
-  
-  if (cached && cached.analysis) {
-    // 恢复日期标签
-    if (cached.week_labels && cached.week_labels.length === 5) {
-      _weekLabels = cached.week_labels;
-    }
-    renderAll(cached);
-    const fname = (cached.file_info || {}).filename || '历史数据';
-    const atime = (cached.file_info || {}).analysis_time ? new Date(cached.file_info.analysis_time).toLocaleString('zh-CN') : '';
-    const urlUid = new URLSearchParams(location.search).get('uid');
-    const sourceLabel = urlUid ? '☁️ 云端同步（' + urlUid + '）' : '💾 本地缓存';
-    document.getElementById('uploadStatus').innerHTML =
-      `<div class="alert alert-success py-2 small">
-        <i class="fas fa-check-circle me-1"></i>
-        <strong>数据已加载：${fname}</strong>${atime ? ' ('+atime+')' : ''}
-        <br><span style="font-size:11px;color:#666;">来源：${sourceLabel}</span>
-      </div>`;
+  if (urlUid) {
+    // 手机端/跨设备访问：从云端加载
+    loadFromCloud(urlUid);
   } else {
-    const stepsHtml = _loadSteps.length > 0 ? 
-      '<br><span style="font-size:10px;color:#888;">诊断: ' + _loadSteps.join(' → ') + '</span>' : '';
-    
-    const urlUid = new URLSearchParams(location.search).get('uid');
-    const tipHtml = urlUid
-      ? `<div class="alert alert-info py-2 small mt-2">
-           <i class="fas fa-cloud-upload-alt me-1"></i>
-           <strong>uid=${urlUid} 云端暂无数据</strong><br>
-           <small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small>
-         </div>`
-      : `<div class="alert alert-primary py-2 small mt-2">
-           <i class="fas fa-upload me-1"></i>
-           <strong>欢迎使用！</strong>请上传 Excel 文件，数据将自动同步到云端。
-         </div>`;
-    
-    document.getElementById('uploadStatus').innerHTML =
-      `<div class="alert alert-warning py-2 small">
-        <i class="fas fa-exclamation-triangle me-1"></i>
-        <strong>暂无数据</strong>${stepsHtml}
-      </div>${tipHtml}`;
+    // 电脑端：从本地加载（不显示加载状态）
+    loadFromLocal();
   }
 })();
+
+// 从本地加载（电脑端）
+function loadFromLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.analysis) {
+        _lastResult = parsed;
+        if (parsed.week_labels && parsed.week_labels.length === 5) {
+          _weekLabels = parsed.week_labels;
+        }
+        renderAll(parsed);
+        const fname = (parsed.file_info || {}).filename || '历史数据';
+        const atime = (parsed.file_info || {}).analysis_time ? new Date(parsed.file_info.analysis_time).toLocaleString('zh-CN') : '';
+        document.getElementById('uploadStatus').innerHTML =
+          `<div class="alert alert-success py-2 small">
+            <i class="fas fa-check-circle me-1"></i>
+            <strong>数据已加载：${fname}</strong>${atime ? ' ('+atime+')' : ''}
+            <br><span style="font-size:11px;color:#666;">来源：💾 本地缓存</span>
+          </div>`;
+        return;
+      }
+    }
+  } catch(e) { console.warn('本地加载失败:', e); }
+  
+  // 无数据时显示提示
+  document.getElementById('uploadStatus').innerHTML =
+    `<div class="alert alert-primary py-2 small">
+       <i class="fas fa-upload me-1"></i>
+       <strong>欢迎使用！</strong>请上传 Excel 文件，数据将自动同步到云端。
+     </div>`;
+}
+
+// 从云端加载（手机端）
+async function loadFromCloud(urlUid) {
+  _tenantId = getTenantId();
+  
+  // 显示简洁加载状态
+  document.getElementById('uploadStatus').innerHTML =
+    `<div class="alert alert-info py-2 small">
+      <i class="fas fa-cloud-download-alt me-1"></i>正在从云端加载...
+    </div>`;
+  
+  try {
+    const requestUrl = (_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
+    const resp = await fetch(requestUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json.success && json.analysis) {
+        // 加载成功
+        const data = json.analysis;
+        _lastResult = data;
+        if (data.week_labels && data.week_labels.length === 5) {
+          _weekLabels = data.week_labels;
+        }
+        renderAll(data);
+        const fname = (data.file_info || {}).filename || '云端数据';
+        const atime = (data.file_info || {}).analysis_time ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '';
+        document.getElementById('uploadStatus').innerHTML =
+          `<div class="alert alert-success py-2 small">
+            <i class="fas fa-check-circle me-1"></i>
+            <strong>数据已加载：${fname}</strong>${atime ? ' ('+atime+')' : ''}
+            <br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步（${urlUid}）</span>
+          </div>`;
+        return;
+      }
+    }
+    
+    // 云端无数据
+    document.getElementById('uploadStatus').innerHTML =
+      `<div class="alert alert-info py-2 small">
+         <i class="fas fa-cloud-upload-alt me-1"></i>
+         <strong>uid=${urlUid} 云端暂无数据</strong><br>
+         <small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small>
+       </div>`;
+  } catch(e) {
+    console.error('云端加载失败:', e);
+    document.getElementById('uploadStatus').innerHTML =
+      `<div class="alert alert-warning py-2 small">
+         <i class="fas fa-exclamation-triangle me-1"></i>
+         <strong>加载失败</strong><br>
+         <small>请检查网络连接后刷新页面重试</small>
+       </div>`;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // Tab 切换
