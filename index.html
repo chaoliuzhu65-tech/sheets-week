@@ -1366,15 +1366,25 @@ renderCollectPanel();
 
 // 页面加载完成后执行数据恢复
 (function initPage() {
-  const urlParams = new URLSearchParams(location.search);
-  const urlUid = urlParams.get('uid');
-  
-  if (urlUid) {
-    // 手机端/跨设备访问：从云端加载
-    loadFromCloud(urlUid);
-  } else {
-    // 电脑端：从本地加载（不显示加载状态）
-    loadFromLocal();
+  try {
+    const urlParams = new URLSearchParams(location.search);
+    const urlUid = urlParams.get('uid');
+    
+    if (urlUid) {
+      // 手机端/跨设备访问：从云端加载
+      console.log('initPage: 检测到uid参数,开始云端加载');
+      // 使用setTimeout确保DOM已就绪
+      setTimeout(function() {
+        loadFromCloud(urlUid);
+      }, 100);
+    } else {
+      // 电脑端：从本地加载（不显示加载状态）
+      loadFromLocal();
+    }
+  } catch(e) {
+    console.error('initPage错误:', e);
+    document.getElementById('uploadStatus').innerHTML =
+      '<div class="alert alert-danger py-2 small">页面初始化失败: ' + e.message + '</div>';
   }
 })();
 
@@ -1411,66 +1421,82 @@ function loadFromLocal() {
      </div>`;
 }
 
-// 从云端加载（手机端）
-async function loadFromCloud(urlUid) {
+// 从云端加载（手机端）- 兼容旧版浏览器
+function loadFromCloud(urlUid) {
   // 初始化配置和租户ID
   initApiConfig();
   _tenantId = getTenantId();
   
-  // 显示简洁加载状态
-  document.getElementById('uploadStatus').innerHTML =
-    `<div class="alert alert-info py-2 small">
-      <i class="fas fa-cloud-download-alt me-1"></i>正在从云端加载...
-    </div>`;
+  console.log('loadFromCloud start:', 'tenantId=', _tenantId);
   
-  console.log('loadFromCloud:', 'tenantId=', _tenantId, 'apiUrl=', _apiBaseUrl);
+  // 显示加载状态
+  var statusEl = document.getElementById('uploadStatus');
+  if (!statusEl) {
+    console.error('uploadStatus元素不存在');
+    return;
+  }
   
-  try {
-    const requestUrl = (_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
-    console.log('请求URL:', requestUrl);
-    const resp = await fetch(requestUrl, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    });
-    
-    if (resp.ok) {
-      const json = await resp.json();
-      if (json.success && json.analysis) {
-        // 加载成功
-        const data = json.analysis;
-        _lastResult = data;
-        if (data.week_labels && data.week_labels.length === 5) {
-          _weekLabels = data.week_labels;
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-download-alt me-1"></i>正在从云端加载...</div>';
+  
+  // 构建请求URL
+  var requestUrl = (_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
+  console.log('请求URL:', requestUrl);
+  
+  // 使用XMLHttpRequest兼容旧版浏览器
+  var xhr = new XMLHttpRequest();
+  xhr.timeout = 10000; // 10秒超时
+  
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      console.log('XHR状态:', xhr.status);
+      
+      if (xhr.status === 200) {
+        try {
+          var json = JSON.parse(xhr.responseText);
+          console.log('响应数据:', json.success ? '成功' : '失败');
+          
+          if (json.success && json.analysis) {
+            // 加载成功
+            var data = json.analysis;
+            _lastResult = data;
+            if (data.week_labels && data.week_labels.length === 5) {
+              _weekLabels = data.week_labels;
+            }
+            renderAll(data);
+            var fname = (data.file_info && data.file_info.filename) ? data.file_info.filename : '云端数据';
+            var atime = (data.file_info && data.file_info.analysis_time) ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '';
+            statusEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="fas fa-check-circle me-1"></i><strong>数据已加载：' + fname + '</strong>' + (atime ? ' (' + atime + ')' : '') + '<br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步（' + urlUid + '）</span></div>';
+          } else {
+            // 云端无数据
+            statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-upload-alt me-1"></i><strong>uid=' + urlUid + ' 云端暂无数据</strong><br><small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small></div>';
+          }
+        } catch(e) {
+          console.error('解析响应失败:', e);
+          statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>数据解析失败</strong><br><small>请刷新页面重试</small></div>';
         }
-        renderAll(data);
-        const fname = (data.file_info || {}).filename || '云端数据';
-        const atime = (data.file_info || {}).analysis_time ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '';
-        document.getElementById('uploadStatus').innerHTML =
-          `<div class="alert alert-success py-2 small">
-            <i class="fas fa-check-circle me-1"></i>
-            <strong>数据已加载：${fname}</strong>${atime ? ' ('+atime+')' : ''}
-            <br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步（${urlUid}）</span>
-          </div>`;
-        return;
+      } else if (xhr.status === 404) {
+        // 云端无数据
+        statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-upload-alt me-1"></i><strong>uid=' + urlUid + ' 云端暂无数据</strong><br><small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small></div>';
+      } else {
+        // 其他错误
+        statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>加载失败 (' + xhr.status + ')</strong><br><small>请检查网络连接后刷新页面重试</small></div>';
       }
     }
-    
-    // 云端无数据
-    document.getElementById('uploadStatus').innerHTML =
-      `<div class="alert alert-info py-2 small">
-         <i class="fas fa-cloud-upload-alt me-1"></i>
-         <strong>uid=${urlUid} 云端暂无数据</strong><br>
-         <small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small>
-       </div>`;
-  } catch(e) {
-    console.error('云端加载失败:', e);
-    document.getElementById('uploadStatus').innerHTML =
-      `<div class="alert alert-warning py-2 small">
-         <i class="fas fa-exclamation-triangle me-1"></i>
-         <strong>加载失败</strong><br>
-         <small>请检查网络连接后刷新页面重试</small>
-       </div>`;
-  }
+  };
+  
+  xhr.ontimeout = function() {
+    console.error('请求超时');
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>请求超时</strong><br><small>网络较慢，请刷新页面重试</small></div>';
+  };
+  
+  xhr.onerror = function() {
+    console.error('网络错误');
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>网络错误</strong><br><small>请检查网络连接后刷新页面重试</small></div>';
+  };
+  
+  xhr.open('GET', requestUrl, true);
+  xhr.setRequestHeader('Accept', 'application/json');
+  xhr.send();
 }
 
 // ═══════════════════════════════════════════════════════════════
