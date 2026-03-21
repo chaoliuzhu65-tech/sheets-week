@@ -624,10 +624,20 @@ const STORAGE_KEY = 'delong_analysis_result';
 const TENANT_KEY = 'delong_user_id';
 
 function generateTenantId() {
-  // 生成唯一的酒店ID: 时间戳 + 随机字符串（仅首次使用时）
+  // 生成唯一的用户ID: 时间戳 + 随机字符串
   const timestamp = Date.now().toString(36);
   const random = Math.random().toString(36).substring(2, 8);
-  return timestamp + '-' + random;
+  return 'user_' + timestamp + '_' + random;
+}
+
+// 生成易记的短ID（用于分享）
+function generateShortId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉易混淆字符
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 function getTenantId() {
@@ -1374,13 +1384,19 @@ renderCollectPanel();
     var urlUid = urlParams.get('uid');
     
     if (urlUid) {
-      // 手机端/跨设备访问：从云端加载
-      console.log('initPage: 检测到uid参数,开始云端加载');
-      // 使用setTimeout确保DOM已就绪
-      // 直接读取JSON文件
+      // 手机端/跨设备访问：直接读取JSON文件
+      console.log('initPage: 检测到uid参数,开始加载');
       loadJsonData(urlUid);
     } else {
-      // 电脑端：从本地加载（不显示加载状态）
+      // 电脑端：检查是否已有用户ID
+      var existingId = localStorage.getItem(TENANT_KEY);
+      if (!existingId) {
+        // 新用户：生成短ID并显示分享链接
+        var shortId = generateShortId();
+        localStorage.setItem(TENANT_KEY, 'uid_' + shortId);
+        showNewUserWelcome(shortId);
+      }
+      // 从本地加载
       loadFromLocal();
     }
   } catch(e) {
@@ -1391,6 +1407,18 @@ renderCollectPanel();
 })();
 
 
+
+// 新用户欢迎提示
+function showNewUserWelcome(shortId) {
+  var shareUrl = location.origin + location.pathname + '?uid=' + shortId;
+  var statusEl = document.getElementById('uploadStatus');
+  statusEl.innerHTML = 
+    '<div class="alert alert-success py-2 small">' +
+    '<strong>🎉 欢迎使用！</strong><br>' +
+    '您的专属ID: <strong>' + shortId + '</strong><br>' +
+    '<small>手机访问:<br><a href="' + shareUrl + '">' + shareUrl + '</a></small>' +
+    '</div>';
+}
 
 // 直接读取JSON文件
 function loadJsonData(urlUid) {
