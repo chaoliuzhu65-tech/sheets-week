@@ -929,17 +929,16 @@ async function loadResult() {
   // 0. 初始化配置
   initApiConfig();
   _tenantId = getTenantId();
-  if (!_supabaseClient) initSupabase();
   
   const shortId = _tenantId.startsWith('uid_') ? _tenantId.substring(4) : _tenantId.substring(0,8);
-  console.log('加载数据, 用户ID:', shortId);
+  console.log('加载数据, tenantId:', _tenantId, 'shortId:', shortId);
   
-  // 1. URL参数中带了uid时，优先走云端加载（不用本地缓存，确保跨设备一致）
+  // 1. URL参数中带了uid时，直接走云端加载
   const urlParams = new URLSearchParams(location.search);
   const urlUid = urlParams.get('uid');
   
   if (!urlUid) {
-    // 同设备：先尝试 localStorage（本地优先，快速恢复）
+    // 同设备：先尝试 localStorage
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -953,83 +952,41 @@ async function loadResult() {
     } catch(e) { console.warn('localStorage load failed:', e); }
   }
   
-  // 2. URL hash 分享数据（兼容旧链接）
-  const hash = location.hash.slice(1);
-  if (hash && hash.length > 10) {
-    try {
-      const jsonStr = decodeURIComponent(escape(atob(hash)));
-      const slim = JSON.parse(jsonStr);
-      const result = expandSlimResult(slim);
-      if (result && result.analysis) {
-        console.log('从 URL hash 加载数据');
-        return result;
-      }
-    } catch(e) { console.warn('URL hash load failed:', e); }
-  }
-  
-  // 3. 从云端加载（Cloudflare Worker）- 增强版，兼容手机端
+  // 2. 从云端加载（简化版，无重试）
   const loadApiUrl = _apiBaseUrl || DEFAULT_API_URL;
-  console.log('从云端加载数据, tenant:', _tenantId, 'API:', loadApiUrl);
-  addLoadStep('请求云端(tenant=' + shortId + ')');
+  const requestUrl = loadApiUrl + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
+  console.log('请求云端:', requestUrl);
+  addLoadStep('请求云端...');
   
-  // 尝试从云端加载，带重试机制
-  const maxRetries = 2;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      addLoadStep('尝试' + attempt + '/' + maxRetries);
-      const controller = new AbortController();
-      // 手机端网络较慢，增加超时时间到 30 秒
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    const resp = await fetch(requestUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    
+    console.log('云端响应:', resp.status, resp.ok);
+    
+    if (resp.ok) {
+      const json = await resp.json();
+      console.log('云端数据:', json.success, json.analysis ? '有' : '无');
       
-      const resp = await fetch(loadApiUrl + '/api/last-analysis?' + new URLSearchParams({
-        tenant: _tenantId
-      }), { 
-        signal: controller.signal,
-        headers: { 'Accept': 'application/json' }
-      });
-      clearTimeout(timeoutId);
-      
-      console.log('云端响应状态:', resp.status);
-      
-      if (resp.ok) {
-        const json = await resp.json();
-        console.log('云端返回数据:', JSON.stringify(json).substring(0, 200));
-        
-        // 检查数据格式 - 兼容新旧格式
-        if (json.success && json.analysis) {
-          console.log('☁️ 从云端加载成功');
-          addLoadStep('云端数据✅');
-          // 缓存到本地
-          json.analysis.tenant_id = _tenantId;
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(json.analysis)); } catch(e) {}
-          _lastResult = json.analysis;
-          return json.analysis;
-        }
-        const errMsg = json.error || '云端无此用户数据';
-        addLoadStep('云端: ' + errMsg);
-        console.warn('云端无数据:', errMsg);
-      } else {
-        addLoadStep('云端HTTP ' + resp.status);
-        console.warn('云端请求失败:', resp.status);
+      if (json.success && json.analysis) {
+        console.log('✅ 云端加载成功');
+        addLoadStep('云端数据✅');
+        json.analysis.tenant_id = _tenantId;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(json.analysis)); } catch(e) {}
+        _lastResult = json.analysis;
+        return json.analysis;
       }
-      
-      // 如果不是最后一次尝试，等待后重试
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 2000));
-      }
-    } catch(e) { 
-      const errName = e.name === 'AbortError' ? '超时' : e.message;
-      addLoadStep('云端失败:' + errName);
-      console.warn('云端加载失败:', e.name);
-      
-      // 如果不是最后一次尝试，等待后重试
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 2000));
-      }
+      addLoadStep('云端: ' + (json.error || '无数据'));
+    } else {
+      addLoadStep('云端HTTP错误:' + resp.status);
     }
+  } catch(e) { 
+    console.error('云端加载失败:', e);
+    addLoadStep('云端失败:' + e.message);
   }
   
-  console.log('所有数据源都没有数据');
   return null;
 }
 
