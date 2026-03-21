@@ -429,6 +429,28 @@
         </div>
       </div>
     </div>
+    <!-- 手机访问 -->
+    <div class="card" id="mobileAccessCard" style="display:none;">
+      <div class="card-header" style="background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:#fff;">
+        <i class="fas fa-mobile-alt me-2"></i>手机访问
+      </div>
+      <div class="card-body text-center">
+        <div id="mobileAccessContent">
+          <p class="small text-muted mb-2">用手机扫描二维码或复制链接</p>
+          <div id="qrcode" style="margin:10px auto;width:150px;height:150px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;">
+            <span class="small text-muted">生成中...</span>
+          </div>
+          <div class="input-group input-group-sm mt-2">
+            <input type="text" id="shareLinkInput" class="form-control" readonly>
+            <button class="btn btn-outline-primary" onclick="copyShareLink()">
+              <i class="fas fa-copy"></i>
+            </button>
+          </div>
+          <p class="small text-muted mt-2 mb-0">同一用户ID，数据自动同步</p>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header" style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;">
         <i class="fas fa-upload me-2"></i>手动上传报表
@@ -1394,6 +1416,8 @@ renderCollectPanel();
       // 电脑端：已有用户ID，优先读取该用户的云端数据
       var shortId = currentUserId.replace('uid_', '');
       console.log('initPage: 读取当前用户云端数据:', shortId);
+      // 显示手机访问卡片
+      showMobileAccessCard(shortId);
       loadJsonData(shortId);
     } else {
       // 新用户：生成短ID并显示欢迎
@@ -1423,6 +1447,59 @@ function showNewUserWelcome(shortId) {
     '您的专属ID: <strong>' + shortId + '</strong><br>' +
     '<small>手机访问:<br><a href="' + shareUrl + '">' + shareUrl + '</a></small>' +
     '</div>';
+  
+  // 显示手机访问卡片
+  showMobileAccessCard(shortId);
+}
+
+// 显示手机访问卡片
+function showMobileAccessCard(shortId) {
+  var card = document.getElementById('mobileAccessCard');
+  var shareUrl = location.origin + location.pathname + '?uid=' + shortId;
+  
+  // 显示卡片
+  card.style.display = 'block';
+  
+  // 设置链接
+  document.getElementById('shareLinkInput').value = shareUrl;
+  
+  // 生成二维码（使用API）
+  var qrcodeDiv = document.getElementById('qrcode');
+  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(shareUrl);
+  qrcodeDiv.innerHTML = '<img src="' + qrUrl + '" style="width:150px;height:150px;" alt="二维码">';
+}
+
+// 复制分享链接
+function copyShareLink() {
+  var input = document.getElementById('shareLinkInput');
+  input.select();
+  input.setSelectionRange(0, 99999);
+  
+  try {
+    navigator.clipboard.writeText(input.value).then(function() {
+      showToast('📋 链接已复制，发给手机端打开即可');
+    });
+  } catch(e) {
+    document.execCommand('copy');
+    showToast('📋 链接已复制');
+  }
+}
+
+// 显示提示
+function showToast(msg) {
+  var existing = document.getElementById('toastMsg');
+  if (existing) existing.remove();
+  
+  var toast = document.createElement('div');
+  toast.id = 'toastMsg';
+  toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:20px;z-index:9999;font-size:14px;';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, 2000);
 }
 
 // 直接读取JSON文件
