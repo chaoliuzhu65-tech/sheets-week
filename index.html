@@ -1429,22 +1429,45 @@ function diagnoseNetwork(urlUid) {
     log('✗ 不支持XHR');
   }
   
-  // 测试3: 尝试访问云端健康接口
-  log('测试云端连接...');
-  var img = new Image();
-  var startTime = Date.now();
-  img.onload = function() {
-    log('✓ 云端图片可达(' + (Date.now()-startTime) + 'ms)');
-    // 继续加载数据
+  // 测试3: 直接测试API（带超时）
+  log('测试API...');
+  
+  var testUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/?_=' + Date.now();
+  var xhr = new XMLHttpRequest();
+  var xhrTimeout = setTimeout(function() {
+    xhr.abort();
+    log('✗ API测试超时');
+    // 继续尝试加载数据
+    loadFromCloud(urlUid);
+  }, 3000);
+  
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      clearTimeout(xhrTimeout);
+      if (xhr.status === 200) {
+        log('✓ API正常(' + xhr.status + ')');
+      } else {
+        log('✗ API错误(' + xhr.status + ')');
+      }
+      // 继续加载数据
+      loadFromCloud(urlUid);
+    }
+  };
+  
+  xhr.onerror = function() {
+    clearTimeout(xhrTimeout);
+    log('✗ API网络错误');
     loadFromCloud(urlUid);
   };
-  img.onerror = function() {
-    log('✗ 云端图片失败');
-    // 仍然尝试加载
+  
+  try {
+    xhr.open('GET', testUrl, true);
+    xhr.send();
+  } catch(e) {
+    clearTimeout(xhrTimeout);
+    log('✗ API请求异常:' + e.message);
     loadFromCloud(urlUid);
-  };
-  // 使用favicon测试
-  img.src = 'https://delong-report-sync.chaoliuzhu65.workers.dev/favicon.ico?_=' + Date.now();
+  }
 }
 
 // 从本地加载（电脑端）
