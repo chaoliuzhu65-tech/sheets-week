@@ -1457,10 +1457,9 @@ renderCollectPanel();
     }
     
     if (isMobileAccess) {
-      // 手机端/跨设备访问：从云端加载
-      console.log('initPage: 从云端加载:', urlUid);
-      alert('调试: 正在从云端加载数据，用户ID=' + urlUid);
-      loadFromCloudflare(urlUid, document.getElementById('uploadStatus'));
+      // 手机端/跨设备访问：从 GitHub JSON 加载
+      console.log('initPage: 手机端从GitHub加载:', urlUid);
+      loadFromGithubJson(urlUid, document.getElementById('uploadStatus'));
     } else if (currentUserId) {
       // 电脑端：已有用户ID，优先读取本地数据
       var shortId = currentUserId.replace('uid_', '');
@@ -1567,72 +1566,52 @@ function loadJsonData(urlUid) {
   loadJsonFile(urlUid, statusEl);
 }
 
-// 从 Cloudflare 加载数据（JSONP方式，避免跨域问题）
-function loadFromCloudflare(urlUid, statusEl) {
-  var callbackName = 'cfCallback_' + Math.random().toString(36).substr(2, 9);
-  var url = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=' + callbackName;
+// 从 GitHub JSON 文件加载数据（纯静态方案，无需Cloudflare）
+function loadFromGithubJson(urlUid, statusEl) {
+  var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
   
-  alert('调试: 开始加载JSONP, url=' + url.substring(0, 50) + '...');
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
-  var script = document.createElement('script');
-  // 增加超时时间到20秒，国内网络访问Cloudflare可能较慢
-  var timeout = setTimeout(function() {
-    cleanup();
-    alert('调试: JSONP超时(20秒)');
-    // 超时后显示更友好的提示
-    statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
-      '<strong>网络较慢</strong><br>' +
-      '正在尝试备用方式加载...<br>' +
-      '<button class="btn btn-sm btn-primary mt-1" onclick="location.reload()">刷新重试</button>' +
-      '</div>';
-    // 尝试直接重载
-    setTimeout(function() {
-      location.reload();
-    }, 3000);
-  }, 20000);
+  var xhr = new XMLHttpRequest();
+  xhr.timeout = 10000;
   
-  function cleanup() {
-    clearTimeout(timeout);
-    if (script.parentNode) document.head.removeChild(script);
-    try { delete window[callbackName]; } catch(e) {}
-  }
-  
-  window[callbackName] = function(data) {
-    cleanup();
-    console.log('Cloudflare返回:', data);
-    alert('调试: Cloudflare回调被调用');
-    alert('调试: Cloudflare返回 success=' + (data && data.success) + ', hasAnalysis=' + !!(data && data.analysis));
-    if (data && data.success && data.analysis) {
-      // Cloudflare 返回的数据结构: {success, analysis: {file_info, data_summary, analysis: {groups}}}
-      // 直接传递给 handleCloudData，它期望 {success, analysis} 结构
-      alert('调试: 调用handleCloudData');
-      handleCloudData(data, urlUid, statusEl);
-    } else if (data && data.success === false) {
-      alert('调试: Cloudflare返回success=false');
-      statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
-        '<strong>暂无数据</strong><br>' +
-        '用户ID: ' + urlUid + '<br>' +
-        '请在电脑端上传Excel文件' +
-        '</div>';
-    } else {
-      alert('调试: 数据格式错误');
-      statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据加载失败</div>';
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      if (xhr.status === 200) {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          // 构造 handleCloudData 期望的格式
+          var wrappedData = {
+            success: true,
+            analysis: data
+          };
+          handleCloudData(wrappedData, urlUid, statusEl);
+        } catch(e) {
+          statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
+        }
+      } else if (xhr.status === 404) {
+        // JSON 文件不存在
+        statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
+          '<strong>暂无数据</strong><br>' +
+          '用户ID: ' + urlUid + '<br>' +
+          '请在电脑端上传Excel文件后，数据将保存到云端' +
+          '</div>';
+      } else {
+        statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载失败，请刷新重试</div>';
+      }
     }
   };
   
-  script.onerror = function(e) {
-    cleanup();
-    alert('调试: JSONP加载错误');
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">云端连接失败，请刷新重试</div>';
+  xhr.ontimeout = function() {
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载超时，请检查网络</div>';
   };
   
-  script.onload = function() {
-    alert('调试: JSONP脚本加载完成');
+  xhr.onerror = function() {
+    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">网络错误，请刷新重试</div>';
   };
   
-  script.src = url;
-  document.head.appendChild(script);
-  alert('调试: JSONP脚本已添加到head');
+  xhr.open('GET', jsonUrl, true);
+  xhr.send();
 }
 
 // 读取 JSON 文件
@@ -1653,9 +1632,12 @@ function loadJsonFile(urlUid, statusEl) {
           statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
         }
       } else if (xhr.status === 404) {
-        // JSON 文件不存在，尝试从 Cloudflare 加载
-        statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在从云端加载...</div>';
-        loadFromCloudflare(urlUid, statusEl);
+        // JSON 文件不存在
+        statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
+          '<strong>暂无数据</strong><br>' +
+          '用户ID: ' + urlUid + '<br>' +
+          '请在电脑端上传Excel文件后，数据将保存到云端' +
+          '</div>';
       } else {
         statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
           '<strong>暂无数据</strong><br>' +
