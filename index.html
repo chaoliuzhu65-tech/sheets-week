@@ -1402,71 +1402,93 @@ function testNetworkAndLoad(urlUid) {
   loadFromCloud(urlUid);
 }
 
-// 网络诊断函数
+// 网络诊断函数 - 同步立即显示结果
 function diagnoseNetwork(urlUid) {
   var statusEl = document.getElementById('uploadStatus');
-  var results = [];
   
-  function log(msg) {
-    console.log(msg);
-    results.push(msg);
-    statusEl.innerHTML = '<div class="alert alert-info py-2 small">' + results.join('<br>') + '</div>';
-  }
+  // 立即显示所有基础信息
+  var info = [];
+  info.push('浏览器: ' + navigator.userAgent.substring(0, 30));
+  info.push('fetch: ' + (window.fetch ? '支持' : '不支持'));
+  info.push('XHR: ' + (window.XMLHttpRequest ? '支持' : '不支持'));
+  info.push('在线: ' + (navigator.onLine ? '是' : '否'));
   
-  log('开始诊断...');
+  statusEl.innerHTML = '<div class="alert alert-info py-2 small">' + info.join('<br>') + '<br>正在测试API...</div>';
   
-  // 测试1: 检测fetch支持
-  if (window.fetch) {
-    log('✓ 支持fetch');
-  } else {
-    log('✗ 不支持fetch');
-  }
+  // 立即尝试最简单的加载
+  setTimeout(function() {
+    simpleLoad(urlUid);
+  }, 500);
+}
+
+// 最简单的加载方式
+function simpleLoad(urlUid) {
+  var statusEl = document.getElementById('uploadStatus');
+  var apiUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev';
+  var requestUrl = apiUrl + '/api/last-analysis?tenant=uid_' + urlUid + '&_=' + Date.now();
   
-  // 测试2: 检测XHR
-  if (window.XMLHttpRequest) {
-    log('✓ 支持XHR');
-  } else {
-    log('✗ 不支持XHR');
-  }
+  statusEl.innerHTML += '<br>请求: ' + requestUrl.substring(0, 50) + '...';
   
-  // 测试3: 直接测试API（带超时）
-  log('测试API...');
-  
-  var testUrl = 'https://delong-report-sync.chaoliuzhu65.workers.dev/?_=' + Date.now();
-  var xhr = new XMLHttpRequest();
-  var xhrTimeout = setTimeout(function() {
-    xhr.abort();
-    log('✗ API测试超时');
-    // 继续尝试加载数据
-    loadFromCloud(urlUid);
+  // 方法1: JSONP
+  var script = document.createElement('script');
+  var callbackName = 'cb' + Date.now();
+  var timeoutId = setTimeout(function() {
+    document.head.removeChild(script);
+    statusEl.innerHTML += '<br>JSONP超时，尝试XHR...';
+    tryXHR();
   }, 3000);
   
-  xhr.onreadystatechange = function() {
-    if (xhr.readyState === 4) {
-      clearTimeout(xhrTimeout);
-      if (xhr.status === 200) {
-        log('✓ API正常(' + xhr.status + ')');
-      } else {
-        log('✗ API错误(' + xhr.status + ')');
+  window[callbackName] = function(data) {
+    clearTimeout(timeoutId);
+    document.head.removeChild(script);
+    statusEl.innerHTML += '<br>JSONP成功!';
+    handleCloudData(data, urlUid, statusEl);
+  };
+  
+  script.src = requestUrl + '&callback=' + callbackName;
+  script.onerror = function() {
+    clearTimeout(timeoutId);
+    statusEl.innerHTML += '<br>JSONP失败，尝试XHR...';
+    tryXHR();
+  };
+  
+  document.head.appendChild(script);
+  
+  // 方法2: XHR
+  function tryXHR() {
+    var xhr = new XMLHttpRequest();
+    var xhrTimeout = setTimeout(function() {
+      xhr.abort();
+      statusEl.innerHTML += '<br>XHR也超时';
+      statusEl.innerHTML += '<br><strong>建议: 切换4G/5G网络</strong>';
+    }, 5000);
+    
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        clearTimeout(xhrTimeout);
+        if (xhr.status === 200) {
+          try {
+            var data = JSON.parse(xhr.responseText);
+            statusEl.innerHTML += '<br>XHR成功!';
+            handleCloudData(data, urlUid, statusEl);
+          } catch(e) {
+            statusEl.innerHTML += '<br>解析失败';
+          }
+        } else {
+          statusEl.innerHTML += '<br>XHR失败: ' + xhr.status;
+        }
       }
-      // 继续加载数据
-      loadFromCloud(urlUid);
-    }
-  };
-  
-  xhr.onerror = function() {
-    clearTimeout(xhrTimeout);
-    log('✗ API网络错误');
-    loadFromCloud(urlUid);
-  };
-  
-  try {
-    xhr.open('GET', testUrl, true);
+    };
+    
+    xhr.onerror = function() {
+      clearTimeout(xhrTimeout);
+      statusEl.innerHTML += '<br>XHR网络错误';
+      statusEl.innerHTML += '<br><strong>建议: 切换4G/5G网络</strong>';
+    };
+    
+    xhr.open('GET', requestUrl, true);
+    xhr.setRequestHeader('Accept', 'application/json');
     xhr.send();
-  } catch(e) {
-    clearTimeout(xhrTimeout);
-    log('✗ API请求异常:' + e.message);
-    loadFromCloud(urlUid);
   }
 }
 
