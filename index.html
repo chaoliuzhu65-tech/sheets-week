@@ -1440,25 +1440,27 @@ renderCollectPanel();
     // 获取当前用户ID
     var currentUserId = localStorage.getItem(TENANT_KEY);
     
-    // 如果 URL 没有 uid，但 localStorage 有，可能是微信浏览器去掉了参数
-    // 尝试从 localStorage 恢复
-    if (!urlUid && currentUserId) {
-      var savedUid = currentUserId.replace('uid_', '');
-      console.log('initPage: 从localStorage恢复uid:', savedUid);
-      urlUid = savedUid;
+    // 判断是否是手机端/跨设备访问（URL有uid参数）
+    var isMobileAccess = false;
+    if (urlUid) {
+      // URL有uid参数，检查是否与localStorage中的不同
+      var currentUid = currentUserId ? currentUserId.replace('uid_', '') : null;
+      if (urlUid !== currentUid) {
+        isMobileAccess = true;
+      }
     }
     
-    if (urlUid) {
-      // 手机端/跨设备访问：URL指定了用户ID
-      console.log('initPage: 检测到uid参数,加载用户数据:', urlUid);
+    if (isMobileAccess) {
+      // 手机端/跨设备访问：URL指定了不同的用户ID
+      console.log('initPage: 手机端访问，加载用户数据:', urlUid);
       loadJsonData(urlUid);
     } else if (currentUserId) {
-      // 电脑端：已有用户ID，优先读取本地数据（更快更可靠）
+      // 电脑端：已有用户ID，优先读取本地数据
       var shortId = currentUserId.replace('uid_', '');
       console.log('initPage: 电脑端读取本地数据:', shortId);
       // 显示手机访问卡片
       showMobileAccessCard(shortId);
-      // 先尝试本地加载，如果没有再尝试云端
+      // 读取本地数据
       loadFromLocal();
     } else {
       // 新用户：生成短ID并显示欢迎
@@ -1601,12 +1603,15 @@ function loadFromCloudflare(urlUid, statusEl) {
   
   window[callbackName] = function(data) {
     cleanup();
+    console.log('Cloudflare返回:', data);
     if (data && data.success && data.analysis) {
       // Cloudflare 返回的数据结构: {success, analysis: {file_info, data_summary, analysis: {groups}}}
       var result = data.analysis;
-      if (result.analysis && result.analysis.groups) {
+      // 检查数据结构 - 可能是 result.analysis.groups 或 result.data_summary
+      if (result.data_summary || (result.analysis && result.analysis.groups)) {
         handleCloudData(result, urlUid, statusEl);
       } else {
+        console.log('数据格式不匹配:', result);
         statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据格式错误</div>';
       }
     } else if (data && data.success === false) {
