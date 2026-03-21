@@ -443,7 +443,15 @@
               <i class="fas fa-copy"></i>
             </button>
           </div>
-          <p class="small text-muted mt-2 mb-0">同一用户ID，数据自动同步</p>
+          <div class="mt-2">
+            <button class="btn btn-warning btn-sm w-100" onclick="downloadJsonForGithub()">
+              <i class="fas fa-download me-1"></i>下载JSON文件（供手机端访问）
+            </button>
+          </div>
+          <p class="small text-muted mt-2 mb-0">
+            <i class="fas fa-info-circle me-1"></i>
+            手机端访问前，请先下载JSON并上传到GitHub的data/目录
+          </p>
         </div>
       </div>
     </div>
@@ -1504,6 +1512,30 @@ function showMobileAccessCard(shortId) {
   var qrcodeDiv = document.getElementById('qrcode');
   var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(shareUrl);
   qrcodeDiv.innerHTML = '<img src="' + qrUrl + '" style="width:150px;height:150px;" alt="二维码">';
+}
+
+// 下载数据为JSON文件（用于上传到GitHub）
+function downloadJsonForGithub() {
+  if (!_lastResult) {
+    alert('请先上传Excel文件');
+    return;
+  }
+  
+  var tenantId = getTenantId();
+  var shortId = tenantId.startsWith('uid_') ? tenantId.substring(4) : tenantId;
+  var jsonStr = JSON.stringify(_lastResult, null, 2);
+  var blob = new Blob([jsonStr], {type: 'application/json'});
+  var url = URL.createObjectURL(blob);
+  
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = shortId + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showToast('📥 JSON文件已下载，请上传到 GitHub 的 data/ 目录');
 }
 
 // 复制分享链接
