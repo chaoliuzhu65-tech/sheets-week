@@ -1413,6 +1413,8 @@ function loadFromLocal() {
 
 // 从云端加载（手机端）
 async function loadFromCloud(urlUid) {
+  // 初始化配置和租户ID
+  initApiConfig();
   _tenantId = getTenantId();
   
   // 显示简洁加载状态
@@ -1421,8 +1423,11 @@ async function loadFromCloud(urlUid) {
       <i class="fas fa-cloud-download-alt me-1"></i>正在从云端加载...
     </div>`;
   
+  console.log('loadFromCloud:', 'tenantId=', _tenantId, 'apiUrl=', _apiBaseUrl);
+  
   try {
     const requestUrl = (_apiBaseUrl || DEFAULT_API_URL) + '/api/last-analysis?tenant=' + encodeURIComponent(_tenantId);
+    console.log('请求URL:', requestUrl);
     const resp = await fetch(requestUrl, {
       method: 'GET',
       headers: { 'Accept': 'application/json' }
