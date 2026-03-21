@@ -1572,11 +1572,14 @@ function loadFromCloudflare(urlUid, statusEl) {
   var callbackName = 'cfCallback_' + Math.random().toString(36).substr(2, 9);
   var url = 'https://delong-report-sync.chaoliuzhu65.workers.dev/api/last-analysis?tenant=uid_' + urlUid + '&callback=' + callbackName;
   
+  alert('调试: 开始加载JSONP, url=' + url.substring(0, 60) + '...');
+  
   var script = document.createElement('script');
   var timeout = setTimeout(function() {
     cleanup();
+    alert('调试: JSONP超时');
     statusEl.innerHTML = '<div class="alert alert-warning py-2 small">云端加载超时，请检查网络或刷新重试</div>';
-  }, 8000);
+  }, 10000);
   
   function cleanup() {
     clearTimeout(timeout);
@@ -1587,6 +1590,7 @@ function loadFromCloudflare(urlUid, statusEl) {
   window[callbackName] = function(data) {
     cleanup();
     console.log('Cloudflare返回:', data);
+    alert('调试: Cloudflare回调被调用');
     alert('调试: Cloudflare返回 success=' + (data && data.success) + ', hasAnalysis=' + !!(data && data.analysis));
     if (data && data.success && data.analysis) {
       // Cloudflare 返回的数据结构: {success, analysis: {file_info, data_summary, analysis: {groups}}}
@@ -1606,13 +1610,19 @@ function loadFromCloudflare(urlUid, statusEl) {
     }
   };
   
-  script.onerror = function() {
+  script.onerror = function(e) {
     cleanup();
+    alert('调试: JSONP加载错误');
     statusEl.innerHTML = '<div class="alert alert-warning py-2 small">云端连接失败，请刷新重试</div>';
+  };
+  
+  script.onload = function() {
+    alert('调试: JSONP脚本加载完成');
   };
   
   script.src = url;
   document.head.appendChild(script);
+  alert('调试: JSONP脚本已添加到head');
 }
 
 // 读取 JSON 文件
