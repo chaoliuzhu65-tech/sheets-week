@@ -1517,10 +1517,12 @@ function loadJsonData(urlUid) {
 
 // 从 GitHub JSON 文件加载数据（纯静态方案，无需Cloudflare）
 function loadFromGithubJson(urlUid, statusEl) {
-  // 统一使用首字母大写的格式（与GitHub上的文件名一致）
-  var normalizedUid = urlUid.charAt(0).toUpperCase() + urlUid.slice(1).toLowerCase();
-  var jsonUrl = './data/' + normalizedUid + '.json?_=' + Date.now();
-  console.log('loadFromGithubJson: 原始uid=' + urlUid + ', 规范化=' + normalizedUid);
+  // 直接使用传入的uid（GitHub上的文件名是小写default.json）
+  var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
+  console.log('loadFromGithubJson: uid=' + urlUid + ', url=' + jsonUrl);
+  
+  // 手机端调试alert
+  alert('调试: 正在加载 ' + jsonUrl);
   
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
@@ -1568,9 +1570,8 @@ function loadFromGithubJson(urlUid, statusEl) {
 
 // 读取 JSON 文件
 function loadJsonFile(urlUid, statusEl) {
-  // 统一使用首字母大写的格式
-  var normalizedUid = urlUid.charAt(0).toUpperCase() + urlUid.slice(1).toLowerCase();
-  var jsonUrl = './data/' + normalizedUid + '.json?_=' + Date.now();
+  // 直接使用传入的uid
+  var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
   
   console.log('loadJsonFile: jsonUrl=', jsonUrl);
   
