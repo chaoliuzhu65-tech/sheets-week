@@ -1563,15 +1563,24 @@ function loadFromGithubJson(urlUid, statusEl) {
   };
   
   xhr.ontimeout = function() {
+    alert('调试: XHR超时');
     statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载超时，请检查网络</div>';
   };
   
   xhr.onerror = function() {
+    alert('调试: XHR网络错误');
     statusEl.innerHTML = '<div class="alert alert-warning py-2 small">网络错误，请刷新重试</div>';
   };
   
-  xhr.open('GET', jsonUrl, true);
-  xhr.send();
+  alert('调试: 准备执行 xhr.open, url=' + jsonUrl);
+  try {
+    xhr.open('GET', jsonUrl, true);
+    alert('调试: xhr.open 成功');
+    xhr.send();
+    alert('调试: xhr.send 已执行');
+  } catch(e) {
+    alert('调试: XHR错误: ' + e.message);
+  }
 }
 
 // 读取 JSON 文件
