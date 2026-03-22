@@ -1530,10 +1530,13 @@ function loadFromGithubJson(urlUid, statusEl) {
   xhr.timeout = 10000;
   
   xhr.onreadystatechange = function() {
+    alert('调试: readyState=' + xhr.readyState + ', status=' + xhr.status);
     if (xhr.readyState === 4) {
       if (xhr.status === 200) {
+        alert('调试: 加载成功，数据长度=' + xhr.responseText.length);
         try {
           var data = JSON.parse(xhr.responseText);
+          alert('调试: JSON解析成功');
           // 构造 handleCloudData 期望的格式
           var wrappedData = {
             success: true,
@@ -1541,9 +1544,11 @@ function loadFromGithubJson(urlUid, statusEl) {
           };
           handleCloudData(wrappedData, urlUid, statusEl);
         } catch(e) {
+          alert('调试: JSON解析失败: ' + e.message);
           statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
         }
       } else if (xhr.status === 404) {
+        alert('调试: 404 文件不存在');
         // JSON 文件不存在
         statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
           '<strong>暂无数据</strong><br>' +
@@ -1551,6 +1556,7 @@ function loadFromGithubJson(urlUid, statusEl) {
           '请在电脑端上传Excel文件后，数据将保存到云端' +
           '</div>';
       } else {
+        alert('调试: 加载失败，status=' + xhr.status);
         statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载失败，请刷新重试</div>';
       }
     }
