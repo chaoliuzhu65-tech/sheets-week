@@ -1402,84 +1402,33 @@ renderCollectPanel();
 // 页面加载时恢复上次数据
 // ═══════════════════════════════════════════════════════════════
 
-// 页面加载完成后执行数据恢复
+// 页面加载完成后执行数据恢复（简化版：单一用户，电脑手机共享数据）
 (function initPage() {
   try {
-    // 兼容方式获取 URL 参数
-    var urlUid = null;
-    var search = location.search;
+    // 检测是否是手机端
+    var isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
+    console.log('initPage: isMobile=', isMobile);
     
-    // 调试信息
-    console.log('initPage: location.search=', search);
-    console.log('initPage: location.href=', location.href);
+    // 统一使用固定数据文件 data/default.json
+    var DATA_FILE = 'default';
     
-    // 方法1: URLSearchParams
-    if (typeof URLSearchParams !== 'undefined' && search) {
-      try {
-        var urlParams = new URLSearchParams(search);
-        urlUid = urlParams.get('uid');
-      } catch(e) {
-        console.log('URLSearchParams failed:', e);
-      }
-    }
-    
-    // 方法2: 正则解析（兼容旧浏览器）
-    if (!urlUid && search) {
-      var match = search.match(/[?&]uid=([^&]+)/);
-      if (match) {
-        urlUid = decodeURIComponent(match[1]);
-      }
-    }
-    
-    console.log('initPage: urlUid=', urlUid);
-    
-    // 获取当前用户ID
-    var currentUserId = localStorage.getItem(TENANT_KEY);
-    
-    // 判断是否是手机端/跨设备访问（URL有uid参数）
-    // 手机端：只要有uid参数就从云端加载（手机端没有localStorage数据）
-    // 电脑端：uid与localStorage不同才从云端加载
-    var isMobileAccess = false;
-    if (urlUid) {
-      // 检测是否是手机端（通过屏幕宽度或触摸支持）
-      var isMobileDevice = window.innerWidth < 768 || 'ontouchstart' in window;
-      var currentUid = currentUserId ? currentUserId.replace('uid_', '') : null;
-      
-      if (isMobileDevice) {
-        // 手机端：有uid参数就从云端加载
-        isMobileAccess = true;
-        console.log('initPage: 检测到手机端，从云端加载');
-      } else if (urlUid !== currentUid) {
-        // 电脑端：不同用户才从云端加载
-        isMobileAccess = true;
-        console.log('initPage: 电脑端访问不同用户，从云端加载');
-      }
-    }
-    
-    if (isMobileAccess) {
-      // 手机端/跨设备访问：从 GitHub JSON 加载
-      console.log('initPage: 手机端从GitHub加载:', urlUid);
-      loadFromGithubJson(urlUid, document.getElementById('uploadStatus'));
-    } else if (currentUserId) {
-      // 电脑端：已有用户ID，优先读取本地数据
-      var shortId = currentUserId.replace('uid_', '');
-      console.log('initPage: 电脑端读取本地数据:', shortId);
-      // 显示手机访问卡片
-      showMobileAccessCard(shortId);
-      // 读取本地数据
-      loadFromLocal();
+    if (isMobile) {
+      // 手机端：从 GitHub JSON 加载
+      console.log('initPage: 手机端模式，从GitHub加载');
+      loadFromGithubJson(DATA_FILE, document.getElementById('uploadStatus'));
     } else {
-      // 新用户：生成短ID并显示欢迎
-      var newShortId = generateShortId();
-      localStorage.setItem(TENANT_KEY, 'uid_' + newShortId);
-      showNewUserWelcome(newShortId);
-      // 显示空状态 - 新用户需要先上传数据
-      document.getElementById('uploadStatus').innerHTML =
-        '<div class="alert alert-primary py-2 small">' +
-        '<strong>新用户欢迎！</strong><br>' +
-        '您的ID: <strong>' + newShortId + '</strong><br>' +
-        '请先上传Excel文件，手机端才能查看数据' +
-        '</div>';
+      // 电脑端：优先读取本地数据，同时显示手机访问提示
+      console.log('initPage: 电脑端模式');
+      var hasLocalData = loadFromLocal();
+      
+      // 显示手机访问提示
+      showMobileAccessCard('default');
+      
+      if (!hasLocalData) {
+        // 本地无数据，尝试从GitHub加载
+        console.log('initPage: 本地无数据，尝试从GitHub加载');
+        loadFromGithubJson(DATA_FILE, document.getElementById('uploadStatus'));
+      }
     }
   } catch(e) {
     console.error('initPage错误:', e);
@@ -1683,7 +1632,7 @@ function loadFromLocal() {
             <strong>数据已加载：${fname}</strong>${atime ? ' ('+atime+')' : ''}
             <br><span style="font-size:11px;color:#666;">来源：💾 本地缓存</span>
           </div>`;
-        return;
+        return true; // 返回有数据
       }
     }
   } catch(e) { console.warn('本地加载失败:', e); }
@@ -1694,6 +1643,7 @@ function loadFromLocal() {
        <i class="fas fa-upload me-1"></i>
        <strong>欢迎使用！</strong>请上传 Excel 文件，数据将自动同步到云端。
      </div>`;
+  return false; // 返回无数据
 }
 
 // 从云端加载（手机端）- 最简单可靠的实现
