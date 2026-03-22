@@ -1521,66 +1521,41 @@ function loadFromGithubJson(urlUid, statusEl) {
   var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
   console.log('loadFromGithubJson: uid=' + urlUid + ', url=' + jsonUrl);
   
-  // 手机端调试alert
-  alert('调试: 正在加载 ' + jsonUrl);
-  
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
-  var xhr = new XMLHttpRequest();
-  xhr.timeout = 10000;
-  
-  xhr.onreadystatechange = function() {
-    alert('调试: readyState=' + xhr.readyState + ', status=' + xhr.status);
-    if (xhr.readyState === 4) {
-      if (xhr.status === 200) {
-        alert('调试: 加载成功，数据长度=' + xhr.responseText.length);
-        try {
-          var data = JSON.parse(xhr.responseText);
-          alert('调试: JSON解析成功');
-          // 构造 handleCloudData 期望的格式
-          var wrappedData = {
-            success: true,
-            analysis: data
-          };
-          handleCloudData(wrappedData, urlUid, statusEl);
-        } catch(e) {
-          alert('调试: JSON解析失败: ' + e.message);
-          statusEl.innerHTML = '<div class="alert alert-warning py-2 small">数据解析失败</div>';
-        }
-      } else if (xhr.status === 404) {
-        alert('调试: 404 文件不存在');
-        // JSON 文件不存在
+  // 使用 fetch API（现代浏览器支持更好）
+  alert('调试: 使用fetch加载 ' + jsonUrl);
+  fetch(jsonUrl, { cache: 'no-cache' })
+    .then(function(response) {
+      alert('调试: fetch响应 status=' + response.status);
+      if (response.ok) {
+        return response.json();
+      } else if (response.status === 404) {
+        throw new Error('404');
+      } else {
+        throw new Error('HTTP ' + response.status);
+      }
+    })
+    .then(function(data) {
+      alert('调试: JSON解析成功');
+      // 构造 handleCloudData 期望的格式
+      var wrappedData = {
+        success: true,
+        analysis: data
+      };
+      handleCloudData(wrappedData, urlUid, statusEl);
+    })
+    .catch(function(error) {
+      alert('调试: fetch错误: ' + error.message);
+      if (error.message === '404') {
         statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
           '<strong>暂无数据</strong><br>' +
-          '用户ID: ' + urlUid + '<br>' +
-          '请在电脑端上传Excel文件后，数据将保存到云端' +
+          '请在电脑端上传Excel文件' +
           '</div>';
       } else {
-        alert('调试: 加载失败，status=' + xhr.status);
-        statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载失败，请刷新重试</div>';
+        statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载失败: ' + error.message + '</div>';
       }
-    }
-  };
-  
-  xhr.ontimeout = function() {
-    alert('调试: XHR超时');
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">加载超时，请检查网络</div>';
-  };
-  
-  xhr.onerror = function() {
-    alert('调试: XHR网络错误');
-    statusEl.innerHTML = '<div class="alert alert-warning py-2 small">网络错误，请刷新重试</div>';
-  };
-  
-  alert('调试: 准备执行 xhr.open, url=' + jsonUrl);
-  try {
-    xhr.open('GET', jsonUrl, true);
-    alert('调试: xhr.open 成功');
-    xhr.send();
-    alert('调试: xhr.send 已执行');
-  } catch(e) {
-    alert('调试: XHR错误: ' + e.message);
-  }
+    });
 }
 
 // 读取 JSON 文件
