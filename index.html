@@ -1538,14 +1538,16 @@ function loadFromGithubJson(urlUid, statusEl) {
     })
     .then(function(data) {
       alert('调试: JSON解析成功, data类型=' + typeof data + ', 有analysis=' + !!data.analysis);
-      // 构造 handleCloudData 期望的格式
-      var wrappedData = {
-        success: true,
-        analysis: data
-      };
-      alert('调试: 调用handleCloudData');
-      handleCloudData(wrappedData, urlUid, statusEl);
-      alert('调试: handleCloudData执行完成');
+      // 直接渲染数据，不再包装
+      alert('调试: 直接调用renderAll');
+      _lastResult = data;
+      if (data.week_labels && data.week_labels.length === 5) {
+        _weekLabels = data.week_labels;
+      }
+      renderAll(data);
+      alert('调试: renderAll完成');
+      statusEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="fas fa-check-circle me-1"></i><strong>数据已加载</strong><br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步</span></div>';
+      alert('调试: 状态已更新');
     })
     .catch(function(error) {
       alert('调试: fetch错误: ' + error.message);
