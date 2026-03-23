@@ -1736,20 +1736,26 @@ function doSimpleXHR(url, urlUid, statusEl) {
 // 处理云端返回的数据
 function handleCloudData(json, urlUid, statusEl) {
   console.log('handleCloudData:', json.success ? '成功' : '失败');
+  alert('调试: handleCloudData开始, success=' + json.success + ', hasAnalysis=' + !!json.analysis);
   
   if (json.success && json.analysis) {
     // 加载成功
     var data = json.analysis;
+    alert('调试: 准备加载数据, hasGroups=' + !!(data.groups) + ', hasFileInfo=' + !!(data.file_info));
     _lastResult = data;
     if (data.week_labels && data.week_labels.length === 5) {
       _weekLabels = data.week_labels;
     }
+    alert('调试: 调用renderAll');
     renderAll(data);
+    alert('调试: renderAll完成');
     var fname = (data.file_info && data.file_info.filename) ? data.file_info.filename : '云端数据';
     var atime = (data.file_info && data.file_info.analysis_time) ? new Date(data.file_info.analysis_time).toLocaleString('zh-CN') : '';
     statusEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="fas fa-check-circle me-1"></i><strong>数据已加载：' + fname + '</strong>' + (atime ? ' (' + atime + ')' : '') + '<br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步（' + urlUid + '）</span></div>';
+    alert('调试: 状态已更新');
   } else {
     // 云端无数据
+    alert('调试: 云端无数据');
     statusEl.innerHTML = '<div class="alert alert-info py-2 small"><i class="fas fa-cloud-upload-alt me-1"></i><strong>uid=' + urlUid + ' 云端暂无数据</strong><br><small>请在此页面<strong>上传 Excel 文件</strong>，数据将自动同步到云端。之后即可在手机端查看。</small></div>';
   }
 }
