@@ -1537,13 +1537,15 @@ function loadFromGithubJson(urlUid, statusEl) {
       }
     })
     .then(function(data) {
-      alert('调试: JSON解析成功');
+      alert('调试: JSON解析成功, data类型=' + typeof data + ', 有analysis=' + !!data.analysis);
       // 构造 handleCloudData 期望的格式
       var wrappedData = {
         success: true,
         analysis: data
       };
+      alert('调试: 调用handleCloudData');
       handleCloudData(wrappedData, urlUid, statusEl);
+      alert('调试: handleCloudData执行完成');
     })
     .catch(function(error) {
       alert('调试: fetch错误: ' + error.message);
