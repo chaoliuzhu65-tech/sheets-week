@@ -1736,7 +1736,8 @@ function doSimpleXHR(url, urlUid, statusEl) {
 // 处理云端返回的数据
 function handleCloudData(json, urlUid, statusEl) {
   console.log('handleCloudData:', json.success ? '成功' : '失败');
-  alert('调试: handleCloudData开始, success=' + json.success + ', hasAnalysis=' + !!json.analysis);
+  alert('调试: handleCloudData开始, json类型=' + typeof json);
+  alert('调试: json.success=' + json.success + ', json.analysis=' + typeof json.analysis);
   
   if (json.success && json.analysis) {
     // 加载成功
