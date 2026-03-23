@@ -1815,11 +1815,14 @@ function renderAll(data) {
   document.getElementById('lastUpdateTime').innerHTML = `<div>更新</div><div>${now}</div>`;
 
   const analysis = data.analysis || {};
-  const overall  = analysis.overall  || {};
-  const groups   = analysis.groups   || [];
+  const innerAnalysis = analysis.analysis || {};  // 嵌套的analysis
+  const overall  = innerAnalysis.overall  || {};
+  const groups   = innerAnalysis.groups   || [];
   _groups = groups;
 
-  document.getElementById('statHotels').textContent  = analysis.hotel_count || 0;
+  // 酒店数量在 data_summary 或 innerAnalysis.hotel_count
+  const hotelCount = (analysis.data_summary || {}).hotel_count || innerAnalysis.hotel_count || 0;
+  document.getElementById('statHotels').textContent  = hotelCount;
   document.getElementById('statRising').textContent  = overall.total_rising || 0;
   document.getElementById('statFalling').textContent = overall.total_falling || 0;
   document.getElementById('statAlerts').textContent  = (analysis.alerts_display || {}).total || 0;
