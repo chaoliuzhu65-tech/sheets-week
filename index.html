@@ -1524,10 +1524,8 @@ function loadFromGithubJson(urlUid, statusEl) {
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
   // 使用 fetch API（现代浏览器支持更好）
-  alert('调试: 使用fetch加载 ' + jsonUrl);
   fetch(jsonUrl, { cache: 'no-cache' })
     .then(function(response) {
-      alert('调试: fetch响应 status=' + response.status);
       if (response.ok) {
         return response.json();
       } else if (response.status === 404) {
@@ -1537,21 +1535,15 @@ function loadFromGithubJson(urlUid, statusEl) {
       }
     })
     .then(function(data) {
-      alert('调试: JSON解析成功, data类型=' + typeof data + ', 有analysis=' + !!data.analysis);
       // data已经是 {success, analysis} 格式，直接使用
-      alert('调试: 直接使用数据');
       _lastResult = data;
       if (data.analysis && data.analysis.week_labels && data.analysis.week_labels.length === 5) {
         _weekLabels = data.analysis.week_labels;
       }
-      alert('调试: 调用renderAll');
       renderAll(data);
-      alert('调试: renderAll完成');
       statusEl.innerHTML = '<div class="alert alert-success py-2 small"><i class="fas fa-check-circle me-1"></i><strong>数据已加载</strong><br><span style="font-size:11px;color:#666;">来源：☁️ 云端同步</span></div>';
-      alert('调试: 状态已更新');
     })
     .catch(function(error) {
-      alert('调试: fetch错误: ' + error.message);
       if (error.message === '404') {
         statusEl.innerHTML = '<div class="alert alert-info py-2 small">' +
           '<strong>暂无数据</strong><br>' +
@@ -1830,18 +1822,18 @@ function renderAll(data) {
   document.getElementById('statHotels').textContent  = analysis.hotel_count || 0;
   document.getElementById('statRising').textContent  = overall.total_rising || 0;
   document.getElementById('statFalling').textContent = overall.total_falling || 0;
-  document.getElementById('statAlerts').textContent  = (data.alerts_display || {}).total || 0;
+  document.getElementById('statAlerts').textContent  = (analysis.alerts_display || {}).total || 0;
 
-  document.getElementById('aiInsight').textContent = data.ai_insight || '暂无洞察';
+  document.getElementById('aiInsight').textContent = analysis.ai_insight || '暂无洞察';
 
   // 渲染日期范围横幅
-  renderDateBanner(data.week_labels || _weekLabels);
+  renderDateBanner(analysis.week_labels || _weekLabels);
 
   renderGroupTabs(groups);
-  renderAlerts(data.alerts_display || {});
+  renderAlerts(analysis.alerts_display || {});
   refreshHotelSelect();
 
-  const alertN = (data.alerts_display || {}).total || 0;
+  const alertN = (analysis.alerts_display || {}).total || 0;
   const alertBtn = document.querySelector('.bottom-nav-item[data-panel="alerts"] span');
   if(alertBtn) alertBtn.textContent = alertN > 0 ? `警示(${alertN})` : '警示';
 }
