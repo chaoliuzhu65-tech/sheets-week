@@ -907,13 +907,20 @@ async function saveResult(result) {
   // 3. 同步到 GitHub（供手机端访问）
   console.log('准备同步到 GitHub...');
   
-  try {
-    await syncToGithub(jsonStr);
-    showSyncStatus('☁️ 数据已同步到云端，手机端可刷新查看');
-    console.log('✅ GitHub 同步成功');
-  } catch(e) { 
-    console.error('❌ GitHub同步失败:', e); 
-    showSyncStatus('⚠️ 本地已保存，云端同步失败: ' + e.message);
+  // 检查 Token 是否存在
+  const token = window.GITHUB_TOKEN || localStorage.getItem('github_token');
+  if (!token) {
+    console.warn('⚠️ 未设置 GitHub Token，跳过云端同步');
+    showSyncStatus('⚠️ 未配置 Token，数据仅保存在本地');
+  } else {
+    try {
+      await syncToGithub(jsonStr);
+      showSyncStatus('☁️ 数据已同步到云端，手机端可刷新查看');
+      console.log('✅ GitHub 同步成功');
+    } catch(e) { 
+      console.error('❌ GitHub同步失败:', e); 
+      showSyncStatus('⚠️ 云端同步失败: ' + e.message);
+    }
   }
   // 3. Supabase 云同步
   if (_supabaseClient) {
