@@ -1564,7 +1564,9 @@ function loadFromGithubJson(urlUid, statusEl) {
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
   // 使用 fetch API（现代浏览器支持更好）
-  fetch(jsonUrl, { cache: 'no-cache' })
+  // 添加随机参数防止缓存
+  var noCacheUrl = jsonUrl + '&_=' + Date.now();
+  fetch(noCacheUrl, { cache: 'no-store' })
     .then(function(response) {
       if (response.ok) {
         return response.json();
