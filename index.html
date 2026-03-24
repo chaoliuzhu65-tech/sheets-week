@@ -817,6 +817,7 @@ async function syncToGithub(jsonStr) {
   
   // 1. 获取当前文件的 SHA（用于更新）
   const getUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}?ref=${BRANCH}`;
+  console.log('GitHub: 获取文件SHA...');
   const getResp = await fetch(getUrl, {
     headers: { 'Authorization': 'token ' + GITHUB_TOKEN }
   });
@@ -825,6 +826,11 @@ async function syncToGithub(jsonStr) {
   if (getResp.ok) {
     const fileInfo = await getResp.json();
     sha = fileInfo.sha;
+    console.log('GitHub: 获取SHA成功');
+  } else {
+    console.log('GitHub: 获取SHA失败，状态:', getResp.status);
+    const errText = await getResp.text();
+    console.log('GitHub: 错误详情:', errText);
   }
   
   // 2. 提交新内容
@@ -846,9 +852,12 @@ async function syncToGithub(jsonStr) {
   });
   
   if (!putResp.ok) {
-    const err = await putResp.json();
-    throw new Error('GitHub API: ' + (err.message || putResp.status));
+    const errText = await putResp.text();
+    console.error('GitHub: 提交失败，状态:', putResp.status);
+    console.error('GitHub: 错误详情:', errText);
+    throw new Error('GitHub API: ' + putResp.status + ' - ' + errText);
   }
+  console.log('GitHub: 提交成功');
   
   return await putResp.json();
 }
