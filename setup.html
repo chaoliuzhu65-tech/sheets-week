@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>德胧报表系统 - 初始化配置</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
+    .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
+    input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+    button { background: #4361ee; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%; }
+    button:hover { background: #3a0ca3; }
+    .success { background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; margin-top: 20px; display: none; }
+    .error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-top: 20px; display: none; }
+    .info { background: #e3f2fd; color: #0d47a1; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔧 德胧报表系统初始化</h1>
+    
+    <div class="info">
+      此页面用于配置 GitHub Token，配置完成后上传的 Excel 数据将自动同步到手机端。
+    </div>
+    
+    <div class="form-group">
+      <label>GitHub Token</label>
+      <input type="text" id="token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+      <small style="color: #666; margin-top: 5px; display: block;">Token 将以 ghp_ 开头，请联系管理员获取</small>
+    </div>
+    
+    <button onclick="saveConfig()">保存配置</button>
+    
+    <div id="success" class="success">
+      ✅ 配置已保存！请返回主页面使用。
+    </div>
+    
+    <div id="error" class="error"></div>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 14px; color: #666;">
+      <p><strong>使用步骤：</strong></p>
+      <ol>
+        <li>点击"保存配置"按钮</li>
+        <li>打开主页面：<a href="./index.html">index.html</a></li>
+        <li>上传 Excel 文件</li>
+        <li>数据将自动同步到手机端</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    function saveConfig() {
+      const token = document.getElementById('token').value.trim();
+      const successDiv = document.getElementById('success');
+      const errorDiv = document.getElementById('error');
+      
+      if (!token || !token.startsWith('ghp_')) {
+        errorDiv.textContent = '❌ 请输入有效的 GitHub Token（以 ghp_ 开头）';
+        errorDiv.style.display = 'block';
+        successDiv.style.display = 'none';
+        return;
+      }
+      
+      // 保存到 localStorage
+      localStorage.setItem('github_token', token);
+      
+      successDiv.style.display = 'block';
+      errorDiv.style.display = 'none';
+      
+      console.log('GitHub Token 已保存');
+    }
+    
+    // 页面加载时检查是否已配置
+    if (localStorage.getItem('github_token')) {
+      document.getElementById('success').textContent = '✅ Token 已配置！可以直接使用主页面了。';
+      document.getElementById('success').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

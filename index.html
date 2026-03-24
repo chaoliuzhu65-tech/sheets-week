@@ -1452,6 +1452,13 @@ renderCollectPanel();
     } else {
       // 电脑端：优先读取本地数据，同时显示手机访问提示
       console.log('initPage: 电脑端模式');
+      
+      // 自动设置 GitHub Token（从环境变量或配置）
+      if (!window.GITHUB_TOKEN && !localStorage.getItem('github_token')) {
+        // 尝试从 localStorage 读取，如果没有则提示用户
+        console.log('请设置 GitHub Token 以同步到手机端');
+      }
+      
       var hasLocalData = loadFromLocal();
       
       // 显示手机访问提示
