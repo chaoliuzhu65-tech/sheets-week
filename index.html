@@ -1338,13 +1338,17 @@ function processFile(file) {
       const aiInsight = generateAiInsight(analysisResult);
       const alertsDisplay = buildAlerts(analysisResult);
 
+      // 构建与GitHub JSON一致的格式: {success, analysis: {...}}
       const result = {
-        file_info: { filename: file.name, analysis_time: new Date().toISOString() },
-        data_summary: { hotel_count: parsed.total_hotels, group_count: METRIC_GROUPS.length },
-        analysis: analysisResult,
-        ai_insight: aiInsight,
-        alerts_display: alertsDisplay,
-        week_labels: _weekLabels.slice(), // 保存日期标签
+        success: true,
+        analysis: {
+          file_info: { filename: file.name, analysis_time: new Date().toISOString() },
+          data_summary: { hotel_count: parsed.total_hotels, group_count: METRIC_GROUPS.length },
+          analysis: analysisResult,  // 嵌套的analysis包含groups和overall
+          ai_insight: aiInsight,
+          alerts_display: alertsDisplay,
+          week_labels: _weekLabels.slice(),
+        }
       };
 
       saveResult(result);
@@ -1606,14 +1610,16 @@ function loadFromLocal() {
     console.log('loadFromLocal: raw=', raw ? '有数据' : '无数据');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.analysis) {
+      // 新格式: {success, analysis: {...}}
+      if (parsed && parsed.success && parsed.analysis) {
         _lastResult = parsed;
-        if (parsed.week_labels && parsed.week_labels.length === 5) {
-          _weekLabels = parsed.week_labels;
+        const innerAnalysis = parsed.analysis;
+        if (innerAnalysis.week_labels && innerAnalysis.week_labels.length === 5) {
+          _weekLabels = innerAnalysis.week_labels;
         }
         renderAll(parsed);
-        const fname = (parsed.file_info || {}).filename || '历史数据';
-        const atime = (parsed.file_info || {}).analysis_time ? new Date(parsed.file_info.analysis_time).toLocaleString('zh-CN') : '';
+        const fname = (innerAnalysis.file_info || {}).filename || '历史数据';
+        const atime = (innerAnalysis.file_info || {}).analysis_time ? new Date(innerAnalysis.file_info.analysis_time).toLocaleString('zh-CN') : '';
         document.getElementById('uploadStatus').innerHTML =
           `<div class="alert alert-success py-2 small">
             <i class="fas fa-check-circle me-1"></i>
