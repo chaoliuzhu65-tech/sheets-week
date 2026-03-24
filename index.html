@@ -1558,15 +1558,14 @@ function loadJsonData(urlUid) {
 // 从 GitHub JSON 文件加载数据（纯静态方案，无需Cloudflare）
 function loadFromGithubJson(urlUid, statusEl) {
   // 直接使用传入的uid（GitHub上的文件名是小写default.json）
+  // 添加随机参数防止缓存
   var jsonUrl = './data/' + urlUid + '.json?_=' + Date.now();
   console.log('loadFromGithubJson: uid=' + urlUid + ', url=' + jsonUrl);
   
   statusEl.innerHTML = '<div class="alert alert-info py-2 small">正在加载数据...</div>';
   
   // 使用 fetch API（现代浏览器支持更好）
-  // 添加随机参数防止缓存
-  var noCacheUrl = jsonUrl + '&_=' + Date.now();
-  fetch(noCacheUrl, { cache: 'no-store' })
+  fetch(jsonUrl, { cache: 'no-store' })
     .then(function(response) {
       if (response.ok) {
         return response.json();
