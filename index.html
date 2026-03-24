@@ -799,6 +799,60 @@ function showSyncStatus(msg, isError = false) {
   setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
 }
 
+// 同步数据到 GitHub（供手机端访问）
+// 注意：需要在浏览器控制台设置 GITHUB_TOKEN 变量
+// 例如：window.GITHUB_TOKEN = 'your_token_here';
+async function syncToGithub(jsonStr) {
+  // 从全局变量获取 Token（用户需在控制台设置）
+  const GITHUB_TOKEN = window.GITHUB_TOKEN || localStorage.getItem('github_token');
+  
+  if (!GITHUB_TOKEN) {
+    throw new Error('未设置 GitHub Token，请在浏览器控制台执行: window.GITHUB_TOKEN = "your_token"');
+  }
+  
+  const REPO_OWNER = 'chaoliuzhu65-tech';
+  const REPO_NAME = 'sheets-week';
+  const FILE_PATH = 'data/default.json';
+  const BRANCH = 'gh-pages';
+  
+  // 1. 获取当前文件的 SHA（用于更新）
+  const getUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}?ref=${BRANCH}`;
+  const getResp = await fetch(getUrl, {
+    headers: { 'Authorization': 'token ' + GITHUB_TOKEN }
+  });
+  
+  let sha = null;
+  if (getResp.ok) {
+    const fileInfo = await getResp.json();
+    sha = fileInfo.sha;
+  }
+  
+  // 2. 提交新内容
+  const putUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
+  const content = btoa(unescape(encodeURIComponent(jsonStr))); // Base64 编码
+  
+  const putResp = await fetch(putUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': 'token ' + GITHUB_TOKEN,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: '更新数据: ' + new Date().toISOString(),
+      content: content,
+      branch: BRANCH,
+      sha: sha  // 如果有 SHA 则更新，否则创建
+    })
+  });
+  
+  if (!putResp.ok) {
+    const err = await putResp.json();
+    throw new Error('GitHub API: ' + (err.message || putResp.status));
+  }
+  
+  return await putResp.json();
+}
+
 // 6组核心指标定义（与 Python analyzer.py 完全一致）
 const METRIC_GROUPS = [
   { name: 'OCC出租率',           colStart: 2,  colCount: 5 },
@@ -850,41 +904,16 @@ async function saveResult(result) {
     tx.objectStore(IDB_STORE).put(jsonStr, IDB_KEY);
   } catch(e) { console.warn('IndexedDB save failed:', e); }
   
-  // 3. 后端API同步（Cloudflare Worker）- 按用户ID保存
-  // 确保先初始化配置
-  initApiConfig();
-  const apiUrl = _apiBaseUrl || DEFAULT_API_URL;
-  console.log('准备同步到云端, API:', apiUrl, 'Tenant:', tenantId);
+  // 3. 同步到 GitHub（供手机端访问）
+  console.log('准备同步到 GitHub...');
   
   try {
-    const shortId = tenantId.startsWith('uid_') ? tenantId.substring(4) : tenantId.substring(0, 8);
-    const syncUrl = apiUrl + '/api/sync?' + new URLSearchParams({
-      tenant: tenantId,
-      secret: ADMIN_SECRET
-    });
-    console.log('同步URL:', syncUrl);
-    
-    const resp = await fetch(syncUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: jsonStr
-    });
-    
-    if (!resp.ok) {
-      throw new Error('HTTP ' + resp.status);
-    }
-    
-    const respData = await resp.json().catch(() => ({}));
-    if (respData.success) {
-      showSyncStatus('☁️ 数据已同步到云端（用户ID: ' + shortId + '）');
-      console.log('✅ 云端同步成功 (用户:', shortId, ')');
-    } else {
-      console.warn('⚠️ 云端返回失败:', respData);
-      showSyncStatus('⚠️ 云端同步返回: ' + (respData.error || '未知错误'));
-    }
+    await syncToGithub(jsonStr);
+    showSyncStatus('☁️ 数据已同步到云端，手机端可刷新查看');
+    console.log('✅ GitHub 同步成功');
   } catch(e) { 
-    console.error('❌ 云端同步失败:', e); 
-    showSyncStatus('❌ 云端同步失败: ' + e.message);
+    console.error('❌ GitHub同步失败:', e); 
+    showSyncStatus('⚠️ 本地已保存，云端同步失败: ' + e.message);
   }
   // 3. Supabase 云同步
   if (_supabaseClient) {
