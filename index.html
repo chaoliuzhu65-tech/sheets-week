@@ -1846,7 +1846,8 @@ function renderAll(data) {
 // ═══════════════════════════════════════════════════════════════
 function refreshHotelSelect() {
   const analysis = (_lastResult || {}).analysis || {};
-  _hotelList = getHotelList(analysis);
+  const innerAnalysis = analysis.analysis || {};  // 嵌套的analysis
+  _hotelList = getHotelList(innerAnalysis);
   const sel = document.getElementById('hotelSelect');
   sel.innerHTML = '<option value="">-- 请选择酒店 --</option>';
   _hotelList.forEach(name => {
@@ -1863,7 +1864,8 @@ function onHotelSelect(hotelName) {
     return;
   }
   const analysis = (_lastResult || {}).analysis || {};
-  const detail = getHotelDetail(analysis, hotelName);
+  const innerAnalysis = analysis.analysis || {};  // 嵌套的analysis
+  const detail = getHotelDetail(innerAnalysis, hotelName);
   if(detail) renderHotelDetail(detail);
   else document.getElementById('hotelDetailContent').innerHTML = `<div class="alert alert-danger py-2 small">未找到酒店: ${hotelName}</div>`;
 }
